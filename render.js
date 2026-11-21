@@ -199,72 +199,155 @@ function gate() {
     );
   }
 }
-function stair(x) {
-  let y = GROUND - 141,
-    w = 100,
-    h = 119;
-  r(x - w / 2 - 4, y - 4, w + 8, h + 8, "#4a463b");
-  r(x - w / 2 - 2, y - 2, w + 4, h + 4, "#b9aa8b");
-  r(x - w / 2, y, w, h, "#4a5d5c");
-  r(x - w / 2 + 4, y + 4, w - 8, h - 6, "#657977");
-  for (let i = 0; i < 11; i++) {
-    let yy = y + 32 + i * 8,
-      ww = 50 + i * 4;
-    r(x - ww / 2, yy, ww, 7, i % 2 ? "#8a8879" : "#888577");
-    r(x - ww / 2, yy, ww, 2, "#beb69d");
-    r(x - ww / 2, yy + 6, ww, 1, "#565d56");
-  }
-  for (let side of [-1, 1]) {
-    for (let i = 0; i < 5; i++) {
-      let px = x + side * (26 + i * 5),
-        py = y + 20 + i * 17;
-      r(px, py, 2, 22, "#494f4a");
-    }
-    g.strokeStyle = "#dbc49a";
-    g.lineWidth = 3;
+function endStairArt() {
+  const tile = assets["stair/" + scene.type];
+  if (!tile?.naturalWidth) return;
+  const width = scene.type === "arena" ? 122 : 126;
+  const height = Math.round((width * tile.naturalHeight) / tile.naturalWidth);
+  for (const stair of sideStairs[scene.type]) {
+    const x = Math.round(stair.x - cam);
+    if (x + width / 2 < 0 || x - width / 2 > W) continue;
+    g.save();
+    g.translate(x, GROUND);
+    if (stair.side === "east") g.scale(-1, 1);
+    g.fillStyle = scene.type === "gate" ? "#54443045" : "#18182d56";
     g.beginPath();
-    g.moveTo(x + side * 26, y + 20);
-    g.lineTo(x + side * 47, y + 90);
-    g.stroke();
-    g.lineWidth = 1;
+    g.ellipse(0, -1, width * 0.45, 2.3, 0, 0, Math.PI * 2);
+    g.fill();
+    g.drawImage(tile, -width / 2, -height, width, height);
+    g.restore();
   }
-  label("↕ 중앙 계단", x, y - 20, "#f8edcd", "#3e524e", 10);
+}
+function hallBoundary(left, right) {
+  if (left.type === "stair")
+    return left.x + (left.side === "center" ? 115 : 64);
+  if (right.type === "stair")
+    return right.x - (right.side === "center" ? 115 : 64);
+  return (left.x + right.x) / 2;
+}
+function hallPlaque(bay, x) {
+  const title =
+    bay.type === "stair" ? scene.floor + "F · " + bay.name : bay.name;
+  g.font = "9px Galmuri, monospace";
+  const width = Math.ceil(g.measureText(title).width) + 13,
+    left = Math.round(x - width / 2);
+  r(left, 90, width, 13, "#706747");
+  r(left + 1, 91, width - 2, 11, "#49645b");
+  r(left + 2, 91, width - 4, 1, "#829180");
+  r(left + 2, 96, 1, 1, "#dfc995");
+  r(left + width - 3, 96, 1, 1, "#dfc995");
+  word(title, x, 97, 9, "#faf0d8");
 }
 function hall() {
   const im = assets.corridor,
-    arr = floors[scene.floor];
-  if (!im?.naturalWidth) {
+    bays = hallBays[scene.floor],
+    stairTile = assets["stair/hall"];
+  if (!im.naturalWidth) {
     r(0, 0, W, H, "#adbcab");
     return;
   }
-  for (let j = 0; j < arr.length; j++) {
-    const [x, name] = arr[j],
-      left = j ? (arr[j - 1][0] + x) / 2 : 0,
-      right = j < arr.length - 1 ? (arr[j + 1][0] + x) / 2 : worldWidth;
-    if (right < cam || left > cam + W) continue;
-    const half = im.width / 2,
-      cut = j % 2 ? half : 0;
-    g.drawImage(
-      im,
-      cut,
-      0,
-      half,
-      im.height,
-      Math.floor(left - cam),
-      0,
-      Math.ceil(right - left) + 1,
-      H,
-    );
-    const sx = x - cam;
-    corridorExhibit(sx, left, right, j, sceneryTime);
-    if (name === "계단") stair(sx);
-    else {
-      label(name, sx, 99, "#e4ecdd", "#354e4e", 10);
-      if (["물리지학실", "생명화학실", "중앙 현관", "매점"].includes(name))
-        star(sx, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.6, 3, "#ffe593");
-    }
+  // Repeat the floor and the complete light fixture independently of room widths.
+  const repeatWidth = Math.round((H * im.width) / im.height);
+  for (
+    let x = Math.floor(cam / repeatWidth) * repeatWidth;
+    x < cam + W;
+    x += repeatWidth
+  )
+    g.drawImage(im, Math.round(x - cam), 0, repeatWidth, H);
+  const wallTop = 80,
+    wallBase = 275;
+  const lampWidth = 158;
+  for (let x = Math.floor(cam / lampWidth) * lampWidth; x < cam + W; x += lampWidth) {
+    g.drawImage(im, 0, 0, im.width * 0.265, im.height * wallTop / H,
+      Math.round(x - cam), 0, lampWidth, wallTop);
   }
-  if (cam + W > worldWidth) r(worldWidth - cam, 0, W, H, "#777b72");
+  for (let j = 0; j < bays.length; j++) {
+    const bay = bays[j],
+      left = j ? hallBoundary(bays[j - 1], bay) : 0,
+      right = j + 1 < bays.length ? hallBoundary(bay, bays[j + 1]) : worldWidth;
+    if (right < cam || left > cam + W) continue;
+    const x = Math.round(bay.x - cam),
+      lx = Math.round(left - cam),
+      rx = Math.round(right - cam);
+    const isStair = bay.type === "stair" && stairTile.naturalWidth;
+    const tile = isStair ? stairTile : im,
+      tw = isStair ? tile.width : im.width / 2;
+    const tx = isStair ? 0 : j % 2 ? 0 : tw,
+      ty = (tile.height * wallTop) / H,
+      th = (tile.height * (wallBase - wallTop)) / H;
+    g.save();
+    if (isStair) {
+      if (bay.side === "east") {
+        g.translate(lx + rx, 0);
+        g.scale(-1, 1);
+      }
+      g.drawImage(
+        tile,
+        0,
+        ty,
+        tw,
+        th,
+        lx,
+        wallTop,
+        rx - lx,
+        wallBase - wallTop,
+      );
+    } else {
+      // Insert window bays in long stretches rather than widening the doors or lights.
+      const doorLeft = Math.max(lx, x - 118),
+        doorRight = Math.min(rx, x + 118);
+      for (const [start, end] of [
+        [lx, doorLeft],
+        [doorRight, rx],
+      ]) {
+        const count = Math.ceil((end - start) / 142);
+        for (let k = 0; k < count; k++) {
+          const a = Math.round(start + (k * (end - start)) / count);
+          const b = Math.round(start + ((k + 1) * (end - start)) / count);
+          g.drawImage(
+            im,
+            im.width * 0.322,
+            ty,
+            im.width * 0.254,
+            th,
+            a,
+            wallTop,
+            b - a,
+            wallBase - wallTop,
+          );
+        }
+      }
+      const half = tw / 2;
+      g.drawImage(
+        tile,
+        tx,
+        ty,
+        half,
+        th,
+        doorLeft,
+        wallTop,
+        x - doorLeft,
+        wallBase - wallTop,
+      );
+      g.drawImage(
+        tile,
+        tx + half,
+        ty,
+        half,
+        th,
+        x,
+        wallTop,
+        doorRight - x,
+        wallBase - wallTop,
+      );
+    }
+    g.restore();
+    if (bay.type !== "stair")
+      corridorExhibit(x, left, right, j - 1, sceneryTime);
+    hallPlaque(bay, x);
+    if (["물리지학실", "생명화학실", "중앙 현관", "매점"].includes(bay.name))
+      star(x, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.4, 3, "#ffe593");
+  }
   for (let o of objects().filter((o) => o.type === "scholar")) {
     let sx = o.x - cam;
     if (sx < -50 || sx > W + 50) continue;
@@ -310,15 +393,6 @@ function battleBack() {
     r(0, 0, W, H, c);
     g.globalAlpha = 1;
   }
-  if (Math.abs(player.x - 90) < 160)
-    label(
-      roof ? "‹  중앙 계단" : "‹  복도로",
-      90 - cam,
-      GROUND - 57,
-      "#e9dfbd",
-      "#292d3a",
-      9,
-    );
   for (let i = 0; i < 22; i++) {
     let x = wrap(i * 107 - cam * 0.3, W),
       y = wrap(i * 37 - sceneryTime * (4 + (i % 4)), 212);
@@ -400,8 +474,8 @@ function character() {
     const t =
       near.type === "scholar"
         ? "↑ 대화"
-        : near.name === "계단"
-          ? "↑ 층 이동"
+        : near.type === "stair"
+          ? (scene.type==="floor"?"↑ "+near.name:scene.type==="roof"?"↑ 5층으로":scene.type==="gate"?"↑ 본관 1층으로":"↑ 복도로")
           : near.name === "매점"
             ? "↑ 회복"
             : "↑ " + near.name;
@@ -587,11 +661,16 @@ function miniMap() {
     rect(6,6,w-12,h-12,ink);
     rect(8,8,w-16,h-16,scene.type === "roof" ? "#a4b0ae" : paper);
     for (const x of [22, 47, 128, 148]) building(x,11,12,7);
-    rect(u(90)-3,21,6,10,road);
+
     routeY = 28;
     route();
     const boss = foes.find(e => e.boss);
     if (boss) { rect(u(boss.x)-2,24,5,5,"#744758"); rect(u(boss.x)-1,25,3,3,"#ed9b9b"); }
+  }
+  for(const stair of objects().filter(o=>o.type==="stair")){
+    const dx=Math.round(u(stair.x));
+    rect(dx-4,routeY-10,9,8,ink);
+    for(let k=0;k<3;k++)rect(dx-3+2*k,routeY-5-k,2,1,"#f7d28c");
   }
   const px = u(player.x);
   rect(px-3,routeY-5,7,6,"#193e3b"); rect(px-1,routeY+1,3,2,"#193e3b");
@@ -604,6 +683,7 @@ function render() {
   if (scene.type === "gate") gate();
   else if (scene.type === "floor") hall();
   else battleBack();
+  if(scene.type!=="floor")endStairArt();
   drawPlatforms();
   monsters();
   character();

@@ -47,7 +47,34 @@ let hp = 100,
   shake = 0,
   near = null,
   resumeFoe = null;
+const mapWidths = { gate: 1140, floor: 2290, arena: 1040, roof: 1040 };
+const sideStairs = Object.fromEntries(
+  Object.entries(mapWidths).map(([type, width]) => [
+    type,
+    [
+      { x: 64, name: "서쪽 계단", side: "west", type: "stair" },
+      { x: width - 64, name: "동쪽 계단", side: "east", type: "stair" },
+    ],
+  ]),
+);
+const hallBays = floors.map((layout) => [
+  sideStairs.floor[0],
+  ...layout.map(([x, name]) =>
+    name === "계단"
+      ? { x, name: "중앙 계단", side: "center", type: "stair" }
+      : { x, name, type: "room" },
+  ),
+  sideStairs.floor[1],
+]);
+function stairX(type, side) {
+  return sideStairs[type].find((stair) => stair.side === side)?.x ?? STAIR;
+}
 const assets = {};
+for (const theme of ["hall", "gate", "arena", "roof"]) {
+  const tile = new Image();
+  tile.src = "assets/stairs/" + theme + ".webp";
+  assets["stair/" + theme] = tile;
+}
 let panelSince = 0;
 let returnFocus = null;
 let saveMessage = "자동 저장";
@@ -207,14 +234,14 @@ function questInfo() {
       subjects[scene.subject].hint,
     ];
   if (progress.cleared.length === 4)
-    return ["옥상에 열린 균열", "중앙 계단에서 옥상으로 올라가세요."];
+    return ["옥상에 열린 균열", "가까운 계단에서 옥상으로 올라가세요."];
   const local = scene.floor - 2;
   if (local >= 0 && !hasKey(local)) {
     const id = progress.learned.includes(local * 2) ? local * 2 + 1 : local * 2;
     return [
       scholars[id][0] + "의 시련",
       scene.floor +
-        "층 계단 " +
+        "층 중앙 계단 " +
         (id % 2 ? "오른쪽" : "왼쪽") +
         "에서 학자를 만나세요.",
     ];
@@ -230,7 +257,7 @@ function questInfo() {
   const needed = subjects.findIndex((s, i) => i < 4 && !hasKey(i));
   return [
     subjects[needed].name + "의 열쇠를 찾아서",
-    "중앙 계단에서 " + subjects[needed].floor + "층으로 올라가세요.",
+    "가까운 계단에서 " + subjects[needed].floor + "층으로 올라가세요.",
   ];
 }
 function refresh() {
@@ -373,7 +400,7 @@ function showMap() {
         );
       })
       .join("") +
-      '<p class="small">층 이동은 각 층 중앙 계단에서 ↑를 누르세요.</p>',
+      '<p class="small">층 이동은 각 층의 서쪽·중앙·동쪽 계단에서 ↑를 누르세요.</p>',
   );
   miniMap();
   $("mapdetail").getContext("2d").drawImage($("mapview"), 0, 0);
@@ -526,10 +553,10 @@ function showHelp() {
     ["1–6", "답 또는 층 선택"], ["M", "캠퍼스 지도"], ["Esc", "메뉴 · 닫기"]
   ].map(([key, action]) => `<div class="help-row"><kbd>${key}</kbd><span>${action}</span></div>`).join(""));
 }
-function showStairs() {
+function showStairs(stair) {
   show(
     "stairs",
-    "중앙 계단",
+    stair.name,
     '<p class="small">이동할 층을 선택하세요. 현재 ' +
       scene.floor +
       "층입니다.</p>" +
@@ -555,15 +582,23 @@ function showStairs() {
             (f === scene.floor ? "　◆" : "") +
             "</span></button>",
         )
-        .join(""),
+        .join("") +
+      (scene.floor === 1 && stair.side !== "center"
+        ? '<button class="rowbtn" data-floor="0"><b>교문</b><span>바깥 계단으로</span></button>'
+        : ""),
   );
   document.querySelectorAll("[data-floor]").forEach(
     (el) =>
       (el.onclick = () => {
         let f = Number(el.dataset.floor);
         closePanel();
-        if (f === 6) enterBattle(4);
-        else go("floor", f, STAIR);
+        if (f === 6)
+          enterBattle(
+            4,
+            stair.side === "center" ? 190 : stairX("roof", stair.side),
+          );
+        else if (f === 0) go("gate", 0, stairX("gate", stair.side));
+        else go("floor", f, stair.x);
       }),
   );
 }
@@ -677,9 +712,12 @@ function labChoice(name) {
 }
 function objects() {
   if (scene.type === "gate")
-    return [{ x: 650, name: "중앙 현관", type: "entrance" }];
+    return [
+      ...sideStairs.gate,
+      { x: 650, name: "중앙 현관", type: "entrance" },
+    ];
   if (scene.type === "floor") {
-    let a = floors[scene.floor].map(([x, name]) => ({ x, name, type: "room" }));
+    let a = [...hallBays[scene.floor]];
     if (scene.floor >= 2)
       for (let j = 0; j < 2; j++) {
         let id = (scene.floor - 2) * 2 + j;
@@ -692,13 +730,15 @@ function objects() {
       }
     return a;
   }
-  return [
-    {
-      x: 90,
-      name: scene.type === "roof" ? "중앙 계단" : "복도로",
-      type: "exit",
-    },
-  ];
+  return sideStairs[scene.type];
+}
+function leaveByStair(stair) {
+  if (scene.type === "roof") go("floor", 5, stairX("floor", stair.side));
+  else if (scene.type === "arena")
+    go("floor", 1, subjects[scene.subject].lab === "물리지학실" ? 1790 : 2090);
+  else if (scene.floor > 1) go("floor", scene.floor - 1, stair.x);
+  else if (scene.type === "floor" && stair.side !== "center")
+    go("gate", 0, stairX("gate", stair.side));
 }
 function findNear() {
   return objects()
@@ -717,8 +757,8 @@ function interact() {
     return;
   }
   tone(470);
-  if (o.type === "entrance") {
-    go("floor", 1, 580);
+  if (scene.type === "gate") {
+    go("floor", 1, o.type === "stair" ? stairX("floor", o.side) : 580);
     if (!progress.intro) {
       progress.intro = true;
       save();
@@ -731,24 +771,13 @@ function interact() {
     }
     return;
   }
-  if (o.type === "exit") {
-    go(
-      "floor",
-      scene.type === "roof" ? 5 : 1,
-      scene.type === "roof"
-        ? STAIR
-        : subjects[scene.subject].lab === "물리지학실"
-          ? 1790
-          : 2090,
-    );
+  if (o.type === "stair") {
+    if (scene.type === "floor") showStairs(o);
+    else leaveByStair(o);
     return;
   }
   if (o.type === "scholar") {
     quiz(o.id);
-    return;
-  }
-  if (o.name === "계단") {
-    showStairs();
     return;
   }
   if (o.name.endsWith("학실") || o.name === "물리지학실") {
@@ -813,8 +842,7 @@ function platforms() {
   ];
 }
 function setScene() {
-  worldWidth =
-    scene.type === "floor" ? 2290 : scene.type === "gate" ? 1140 : 1040;
+  worldWidth = mapWidths[scene.type];
   player.x = clamp(player.x, 20, worldWidth - 20);
   Object.assign(player, {
     y: GROUND,
@@ -857,14 +885,14 @@ function go(type, f, x, sub = -1) {
   setScene();
   save();
 }
-function enterBattle(i) {
+function enterBattle(i,entryX=190) {
   if (
     i === 4
       ? progress.cleared.length !== 4
       : !hasKey(i) || progress.cleared.includes(i)
   )
     return;
-  go(i === 4 ? "roof" : "arena", i === 4 ? 6 : 1, 190, i);
+  go(i === 4 ? "roof" : "arena", i === 4 ? 6 : 1, entryX, i);
   if (i === 4 && progress.won) return;
   dialogue("요룡이", "hero", subjects[i].intro, "전투 시작");
 }
@@ -908,7 +936,7 @@ function winBoss(i) {
       subjects[i].seal +
       "</b>을 되찾았다! " +
       (progress.cleared.length === 4
-        ? "네 인장이 모두 빛난다. 중앙 계단 위, 옥상 문이 열렸다!"
+        ? "네 인장이 모두 빛난다. 계단 위, 옥상 문이 열렸다!"
         : "다른 실험실에도 아직 과학의 기억이 남아 있어."),
     "모험 계속하기",
   );
@@ -1328,13 +1356,10 @@ function press(code, repeat = false) {
   if (["KeyQ", "KeyW", "KeyE", "KeyR"].includes(code))
     cast(slotKeys.indexOf(code.slice(-1)));
   if (code === "ArrowUp" || code === "Enter") interact();
-  if (
-    code === "ArrowDown" &&
-    scene.type === "floor" &&
-    Math.abs(player.x - STAIR) < 58 &&
-    scene.floor > 1
-  )
-    go("floor", scene.floor - 1, STAIR);
+  if(code==="ArrowDown" && !foes.some(e=>e.boss&&e.dying)){
+    const stair=findNear();
+    if(stair?.type==="stair" && scene.type!=="gate") leaveByStair(stair);
+  }
 }
 const gameKeys = new Set([
   "ArrowLeft",
@@ -1366,7 +1391,7 @@ window.addEventListener("keydown", (e) => {
     }
     return;
   }
-  const digit = /^(?:Digit|Numpad)([1-6])$/.exec(e.code);
+  const digit = /^(?:Digit|Numpad)([0-6])$/.exec(e.code);
   if (digit && (modal === "quiz" || modal === "stairs")) {
     if (!e.repeat) {
       const n = Number(digit[1]);

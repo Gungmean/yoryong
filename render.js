@@ -1,7 +1,10 @@
 "use strict";
 const cv = $("world"),
   g = cv.getContext("2d", { alpha: false }),
+  lettering = $("field-lettering"),
+  ink = lettering.getContext("2d"),
   mini = $("mapview").getContext("2d");
+let inkScaleX = 1, inkScaleY = 1, fieldDpr = 1;
 const r = (x, y, w, h, c) => {
   g.fillStyle = c;
   g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
@@ -17,17 +20,63 @@ function path(p, col) {
   g.closePath();
   g.fill();
 }
-function word(t, x, y, size = 9, col = "#fff3d6", align = "center") {
-  g.font = size + "px Galmuri, monospace";
-  g.textAlign = align;
-  g.textBaseline = "middle";
-  g.fillStyle = col;
-  g.fillText(t, Math.round(x), Math.round(y));
+function fieldFont(size) {
+  // Galmuri11 uses a 12-unit em. Each font dot covers whole device pixels.
+  const target = size < 8 ? size : Math.max(size, 11);
+  const dots = Math.max(1, Math.round(Math.max(target * inkScaleY, target * fieldDpr) / 12));
+  const pixels = 12 * dots;
+  ink.font = pixels + "px Galmuri, monospace";
+  return pixels / inkScaleY;
+}
+// Sample the center of each font dot once. Browser antialiasing at the outlines
+// must not become a colored fringe when a glyph is enlarged for the field.
+const glyphRuns = new Map();
+document.fonts.load("12px Galmuri", "중앙 현관").then(() => glyphRuns.clear(), () => {});
+function pixelLettering(text, color) {
+  const key = color + ":" + text;
+  if (glyphRuns.has(key)) return glyphRuns.get(key);
+  const sample = document.createElement("canvas");
+  const source = sample.getContext("2d", { willReadFrequently: true });
+  source.font = "48px Galmuri, monospace";
+  const metrics = source.measureText(text);
+  const width = Math.max(1, Math.ceil(metrics.width / 4));
+  const top = Math.ceil(metrics.actualBoundingBoxAscent / 4);
+  const height = Math.max(1, top + Math.ceil(metrics.actualBoundingBoxDescent / 4));
+  sample.width = width * 4;
+  sample.height = height * 4;
+  source.font = "48px Galmuri, monospace";
+  source.fillStyle = color;
+  source.fillText(text, 0, top * 4);
+  const pixels = source.getImageData(0, 0, sample.width, sample.height).data;
+  const run = document.createElement("canvas");
+  run.width = width;
+  run.height = height;
+  const ctx = run.getContext("2d");
+  ctx.fillStyle = color;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (pixels[((4 * y + 2) * sample.width + 4 * x + 2) * 4 + 3] >= 128)
+        ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  glyphRuns.set(key, run);
+  return run;
+}
+function word(t, x, y, size = 9, col = "#fff3d6") {
+  const dots = Math.round(fieldFont(size) * inkScaleY / 12);
+  const run = pixelLettering(t, col), width = run.width * dots, height = run.height * dots;
+  ink.drawImage(run, Math.round(Math.round(x) * inkScaleX - width / 2),
+    Math.round(Math.round(y) * inkScaleY - height / 2), width, height);
+}
+function clearLetteringUnder(x, y, w, h) {
+  ink.clearRect(Math.round(x * inkScaleX), Math.round(y * inkScaleY),
+    Math.ceil(w * inkScaleX), Math.ceil(h * inkScaleY));
 }
 function label(t, x, y, color = "#f6e6bb", bg = "#252936", size = 9) {
-  g.font = size + "px Galmuri, monospace";
-  const w = Math.ceil(g.measureText(t).width) + 12;
-  const left = x - w / 2, h = size + 6;
+  const h = Math.ceil(fieldFont(size)) + 6;
+  const w = Math.ceil(ink.measureText(t).width / inkScaleX) + 12;
+  const left = x - w / 2;
+  clearLetteringUnder(left, y, w, h);
   r(left + 1, y, w - 2, h, "#bba16c");
   r(left, y + 1, w, h - 2, "#243658");
   r(left + 1, y + 1, w - 2, h - 2, bg);
@@ -140,6 +189,12 @@ function resize() {
   W = Math.max(1, Math.round((b.width * H) / Math.max(1, b.height)));
   cv.width = W;
   cv.height = H;
+  fieldDpr = window.devicePixelRatio || 1;
+  lettering.width = Math.max(1, Math.round(b.width * fieldDpr));
+  lettering.height = Math.max(1, Math.round(b.height * fieldDpr));
+  ink.imageSmoothingEnabled = false;
+  inkScaleX = lettering.width / W;
+  inkScaleY = lettering.height / H;
   g.imageSmoothingEnabled = false;
   cam = clamp(player.x - W * 0.42, 0, Math.max(0, worldWidth - W));
 }
@@ -228,12 +283,13 @@ function hallBoundary(left, right) {
 function hallPlaque(bay, x) {
   const title =
     bay.type === "stair" ? scene.floor + "F · " + bay.name : bay.name;
-  g.font = "9px Galmuri, monospace";
-  const width = Math.ceil(g.measureText(title).width) + 13,
-    left = Math.round(x - width / 2);
-  r(left, 90, width, 13, "#706747");
-  r(left + 1, 91, width - 2, 11, "#49645b");
-  r(left + 2, 91, width - 4, 1, "#829180");
+  const height = Math.ceil(fieldFont(9)) + 5;
+  const width = Math.ceil(ink.measureText(title).width / inkScaleX) + 13;
+  const left = Math.round(x - width / 2), top = Math.round(97 - height / 2);
+  clearLetteringUnder(left, top, width, height);
+  r(left, top, width, height, "#706747");
+  r(left + 1, top + 1, width - 2, height - 2, "#405b51");
+  r(left + 2, top + 1, width - 4, 1, "#829180");
   r(left + 2, 96, 1, 1, "#dfc995");
   r(left + width - 3, 96, 1, 1, "#dfc995");
   word(title, x, 97, 9, "#faf0d8");
@@ -580,18 +636,21 @@ function particles() {
       }
     }
     if (e.type === "bubble") {
-      const count = 23,
-        lines = e.msg.match(new RegExp(".{1," + count + "}", "g")) || [e.msg];
-      g.font = "9px Galmuri";
-      let ww = Math.min(
-          W - 12,
-          Math.max(...lines.map((l) => g.measureText(l).width)) + 14,
-        ),
-        hh = lines.length * 13 + 7;
+      const lineHeight = Math.ceil(fieldFont(9)) + 4;
+      const widthOf = line => ink.measureText(line).width / inkScaleX;
+      const lines = [""];
+      for (const ch of e.msg) {
+        const last = lines.length - 1, line = lines[last] + ch;
+        if (lines[last] && (line.length > 23 || widthOf(line) > W - 26)) lines.push(ch);
+        else lines[last] = line;
+      }
+      const ww = Math.ceil(Math.max(...lines.map(widthOf))) + 14;
+      const hh = lines.length * lineHeight + 7;
       x = clamp(x, ww / 2 + 4, W - ww / 2 - 4);
+      clearLetteringUnder(x - ww / 2, y - hh, ww, hh);
       r(x - ww / 2 - 1, y - hh - 1, ww + 2, hh + 2, "#34323a");
       r(x - ww / 2, y - hh, ww, hh, "#fff1cb");
-      lines.forEach((l, i) => word(l, x, y - hh + 8 + i * 13, 9, "#3c393c"));
+      lines.forEach((l, i) => word(l, x, y - hh + 3 + (i + 0.5) * lineHeight, 9, "#3c393c"));
       path(
         [
           [x - 3, y],
@@ -677,9 +736,16 @@ function miniMap() {
   rect(px-2,routeY-4,5,4,"#ffce6a"); rect(px-1,routeY-4,2,1,"#fff2c4");
 }
 function render() {
+  if (fieldDpr !== (window.devicePixelRatio || 1)) resize();
+  ink.clearRect(0, 0, lettering.width, lettering.height);
+  ink.save();
   g.imageSmoothingEnabled = false;
   g.save();
-  if (!reducedMotion.matches && shake > 0.5) g.translate(Math.round(Math.sin(clock * 93) * shake), 0);
+  if (!reducedMotion.matches && shake > 0.5) {
+    const offset = Math.round(Math.sin(clock * 93) * shake);
+    g.translate(offset, 0);
+    ink.translate(Math.round(offset * inkScaleX), 0);
+  }
   if (scene.type === "gate") gate();
   else if (scene.type === "floor") hall();
   else battleBack();
@@ -689,6 +755,7 @@ function render() {
   character();
   particles();
   g.restore();
+  ink.restore();
   if (!$("mapview").hidden) miniMap();
 }
 let last = 0,

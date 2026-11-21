@@ -562,7 +562,7 @@ const campusWorld = (() => {
               ? 18 + ((i * 27.8 + t * (7 + (i % 4))) % period)
               : 265 - ((i * 37.4 + t * (5 + (i % 5))) % period);
         const z = -115 + ((i * 17) % 103),
-          size = kind === "leaves" ? 1.7 : kind === "bubbles" ? 1.4 : 0.8;
+          size = kind === "leaves" ? 3 : kind === "bubbles" ? 2.6 : 1.45;
         dummy.position.set(x + Math.sin(t * (0.45 + (i % 3) * 0.14) + i) * 6, worldY(sy, z), z);
         const pulse = 0.72 + 0.28 * Math.sin(t * 1.3 + i);
         dummy.scale.set(
@@ -793,11 +793,11 @@ const campusWorld = (() => {
       orbit.rotation.z = 0.22;
       const shards = [];
       for (let i = 0; i < 9; i++)
-        shards.push(part(orbit, "gem", i % 3 ? "#bd78cc" : "#efb788", 0, 0, 0, 3.1, 6.1, 3, 0.36));
+        shards.push(part(orbit, "gem", i % 3 ? "#c983e3" : "#ffc99d", 0, 0, 0, 4.8, 9.2, 4, 0.43));
       moving.push((t) =>
         shards.forEach((rock, i) => {
           const a = t * 0.26 + (i * 2 * Math.PI) / 9;
-          rock.position.set(46 * Math.cos(a), 12 * Math.sin(a), 16 * Math.sin(a));
+          rock.position.set(55 * Math.cos(a), 16 * Math.sin(a), 19 * Math.sin(a));
           rock.rotation.set(0.21, a * 2, a * 0.42);
         }),
       );

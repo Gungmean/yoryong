@@ -225,26 +225,9 @@ function gate(depth) {
     campusAir(sceneryTime);
   }
   const sx = 650 - cam;
-  shadow(sx, GROUND + 1, 23);
-  for (let i = 0; i < 4; i++) {
-    let phase = (sceneryTime * 0.6 + i / 4) % 1;
-    g.globalAlpha = (1 - phase) * 0.6;
-    g.strokeStyle = "#fff0a7";
-    g.beginPath();
-    g.ellipse(
-      sx,
-      GROUND - 1,
-      13 + phase * 17,
-      2 + phase * 2,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    g.stroke();
-  }
-  g.globalAlpha = 1;
+  entranceLight(sx, GROUND, sceneryTime);
   if (Math.abs(player.x - 650) > 60) {
-    let y = GROUND - 32 + Math.sin(sceneryTime * 2) * 1.4;
+    let y = GROUND - 105 + Math.sin(sceneryTime * 2) * 1.4;
     label("중앙 현관  ›", sx, y, "#fff2c8", "#343c42", 9);
     path(
       [
@@ -411,7 +394,7 @@ function hall(depth) {
     if (x < -90 || x > W + 90) continue;
     hallPlaque(bay, x);
     if (["물리지학실", "생명화학실", "중앙 현관", "매점"].includes(bay.name))
-      star(x, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.4, 3, "#ffe593");
+      star(x, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.4, 5, "#ffe593");
   }
   for (let o of objects().filter((o) => o.type === "scholar")) {
     let sx = o.x - cam;
@@ -509,30 +492,17 @@ function character() {
   shadow(x, GROUND + 1, clamp(16 - (GROUND - p.y) / 10, 7, 16));
   const frame = heroFrame(p);
   if (p.dash > 0) {
-    for (let i = 1; i <= 3; i++) {
-      g.globalAlpha = 0.22 / i;
-      drawActor("hero", frame, x - p.face * (i * 9), p.y, 60, f);
+    const dashFrame = Math.min(7, Math.floor((1 - p.dash / .19) * 8));
+    combatSprite(FX_DASH, dashFrame, x, p.y - 22, 1, f, reducedMotion.matches ? .55 : .93);
+    for (let i = 1; i <= (reducedMotion.matches ? 0 : 3); i++) {
+      g.globalAlpha = 0.29 / i;
+      drawActor("hero", frame, x - p.face * (i * 13), p.y, 60, f);
     }
     g.globalAlpha = 1;
   }
   if (p.inv > 0.1 && p.hurtTime > 0) g.filter = "brightness(1.28)";
   drawActor("hero", frame, x, p.y - bob, 60, f);
   g.filter = "none";
-  if (p.swing > 0) {
-    const sign = p.face,
-      t = 1 - p.swing / 0.2;
-    g.save();
-    g.translate(x, p.y - 27);
-    g.scale(sign, 1);
-    const a = -1.45 + t * 1.7;
-    for (let i = 0; i < 12; i++) {
-      let angle = a + i * 0.1,
-        xx = Math.cos(angle) * 47,
-        yy = Math.sin(angle) * 38;
-      r(xx, yy, 4, 3, i < 5 ? "#f5c477" : "#fff0c0");
-    }
-    g.restore();
-  }
   if (!near || near.type === "scholar")
     label("요룡이", x, p.y + 5, "#fff4db", "#2c303b", 8);
   if (near) {
@@ -554,11 +524,8 @@ function monsters() {
       h = e.boss ? (e.kind === 4 ? 113 : 86) : 27;
     shadow(x, GROUND + 2, e.boss ? 32 : 10);
     if (e.boss && e.warn > 0) {
-      let cx = e.markedX - cam;
-      g.globalAlpha = 0.45 + 0.2 * Math.sin(clock * 20);
-      r(cx - 22, GROUND, 44, 2, "#ff9c80");
-      g.globalAlpha = 1;
-      label(subjects[e.kind].tell, x, e.y - h - 23, "#ffddb5", "#693e48", 8);
+      const tell = subjects[attackPattern(e)].tell;
+      label(e.kind === 4 ? "망각 · " + tell : tell, x, e.y - h - 23, "#ffddb5", "#693e48", 8);
     }
     if (e.hit > 0) g.filter = "brightness(1.7)";
     if (e.dying > 0) g.globalAlpha = Math.min(1, e.dying * 5);
@@ -572,77 +539,14 @@ function monsters() {
   }
 }
 function particles() {
-  for (let s of shots) {
-    let x = s.x - cam,
-      y = s.y;
-    if (s.team) {
-      const c = subjects[s.id].color;
-      g.globalAlpha = 0.28;
-      r(x - 8, y - 6, 16, 12, c);
-      g.globalAlpha = 1;
-      path(
-        [
-          [x - 6, y],
-          [x, y - 7],
-          [x + 6, y],
-          [x, y + 7],
-        ],
-        c,
-      );
-      star(x, y, 2, "#fff4d2");
-      if (s.vx === 0) r(x - 2, y - 12, 3, 6, c);
-      else r(x - Math.sign(s.vx) * 12, y - 1, 7, 2, c);
-    } else {
-      let sz = s.area ? 29 : s.id === 4 ? 29 : 22;
-      g.globalAlpha = 0.3;
-      for (let k = 1; k < 4; k++)
-        star(
-          x - (s.vx ? Math.sign(s.vx) * k * 6 : 0),
-          y - (s.vy > 100 ? k * 7 : 0),
-          3,
-          subjects[Math.floor(s.id / 2)].color,
-        );
-      g.globalAlpha = 1;
-      // The battle atlas supplies the same silhouettes used in the player's hotbar.
-      const im = assets["effect" + s.id];
-      if (im?.naturalWidth)
-        sprite("effect" + s.id, x, y + sz / 2, sz, s.dir < 0 && !s.area);
-      else sprite("skill" + s.id, x, y + sz / 2, sz);
-    }
-  }
-  for (let e of effects) {
-    let x = e.x - cam,
-      y = e.y;
+  for (const s of shots) drawCombatShot(s);
+  for (const e of effects) {
+    let x = e.x - cam, y = e.y;
     if (e.type === "spark") {
-      r(x, y, e.life > 0.2 ? 3 : 1, 2, e.color);
-    }
-    if (e.type === "summon") {
-      g.globalAlpha = Math.min(0.84, e.life * 2);
-      drawActor(
-        "scholar" + e.id,
-        4 + Math.min(3, Math.floor((1 - e.life / e.max) * 4)),
-        x,
-        y - (1 - e.life / e.max) * 14,
-        49,
-        e.flip,
-      );
-      star(x + 15, y - 19, 2, "#fff0a6");
-      g.globalAlpha = 1;
-    }
-    if (e.type === "wave") {
-      let t = 1 - e.life / e.max,
-        c = subjects[Math.floor(e.id / 2)].color;
-      if (e.id === 7) {
-        g.globalAlpha = 1 - t;
-        sprite("effect7", x, y - 3, 35 + t * 22);
-        g.globalAlpha = 1;
-      }
-      for (let i = 0; i < 14; i++) {
-        let d = (i - 7) * t * (e.id === 7 ? 30 : 10);
-        let yy = y - Math.sin(i * 1.3 + t * 3) ** 2 * (1 - t) * 29;
-        r(x + d, yy, 3, Math.max(2, y - yy), c);
-        star(x + d, yy, 2, "#fff0bb");
-      }
+      const size = e.life > 0.22 ? 3 : 1;
+      r(x, y, size + 1, size, e.color);
+    } else {
+      drawCombatAccent(e);
     }
     if (e.type === "bubble") {
       const lineHeight = Math.ceil(fieldFont(9)) + 4;
@@ -671,8 +575,8 @@ function particles() {
     }
   }
   for (let t of texts) {
-    word(String(t.n), t.x - cam + 1, t.y + 1, 15, "#493a35");
-    word(String(t.n), t.x - cam, t.y, 15, "#ffe8a9");
+    word(String(t.n), t.x - cam + 1, t.y + 1, 19, "#493a35");
+    word(String(t.n), t.x - cam, t.y, 19, "#ffe8a9");
   }
 }
 function miniMap() {
@@ -764,6 +668,7 @@ function render() {
     if (scene.type !== "floor") endStairArt();
     drawPlatforms();
   }
+  drawCombatGround();
   monsters();
   character();
   particles();

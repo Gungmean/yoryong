@@ -70,6 +70,8 @@ function stairX(type, side) {
   return sideStairs[type].find((stair) => stair.side === side)?.x ?? STAIR;
 }
 const assets = {};
+assets.combat = new Image();
+assets.combat.src = "assets/combat/effects.webp";
 for (const theme of ["hall", "gate", "arena", "roof"]) {
   const tile = new Image();
   tile.src = "assets/stairs/" + theme + ".webp";
@@ -95,7 +97,6 @@ for (const name of [
   ...Array.from({ length: 8 }, (_, i) => "scholar" + i),
   ...Array.from({ length: 6 }, (_, i) => "foe" + i),
   ...Array.from({ length: 8 }, (_, i) => "skill" + i),
-  ...Array.from({ length: 8 }, (_, i) => "effect" + i),
 ]) {
   const im = new Image();
   im.src =
@@ -653,6 +654,7 @@ function quiz(id) {
             return;
           }
           progress.learned.push(id);
+          combatEvent("discovery", player.x, player.y, .95, { id });
           let empty = progress.slots.indexOf(null);
           if (empty >= 0) progress.slots[empty] = id;
           const n = Math.floor(id / 2);
@@ -791,6 +793,7 @@ function interact() {
   if (o.name === "매점") {
     hp = 100;
     mp = 60;
+    combatEvent("heal", player.x, player.y, .55);
     save();
   }
   bubble(campusNotes[o.name] || o.name + "에서 분필 냄새가 난다.");
@@ -941,17 +944,21 @@ function winBoss(i) {
     "모험 계속하기",
   );
 }
-function hitFoe(e, n) {
+function hitFoe(e, n, skill = -1) {
   if (e.dying || !foes.includes(e)) return;
   e.hp = Math.max(0, e.hp - n);
   e.hit = 0.19;
   texts.push({ x: e.x, y: e.y - (e.boss ? 83 : 34), n, life: 0.68 });
   spark(e.x, e.y - 28, "#ffe39b", 8);
+  if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.max - fx.life < .065)) {
+    combatEvent("impact", e.x, e.y - (e.boss ? 39 : 20), .31, { id: skill, target: e });
+  }
   shake = Math.max(shake, 2);
   if (e.hp <= 0) {
     e.dying = 0.7;
     e.warn = 0;
     e.action = 0;
+    combatEvent("defeat", e.x, e.y - (e.boss ? 48 : 15), .68, { kind: e.kind, boss: e.boss });
     if (e.boss) {
       shots = [];
       player.celebrate = 0.7;
@@ -970,6 +977,7 @@ function hurt(n) {
   shake = 4;
   tone(110, 0.18, "triangle");
   spark(player.x, player.y - 25, "#ffac9b", 9);
+  combatEvent("hurt", player.x, player.y - 24, .3);
   if (!hp) {
     show(
       "down",
@@ -1008,6 +1016,7 @@ function attack() {
   if (player.attackCD > 0 || modal) return;
   player.attackCD = 0.34;
   player.swing = 0.2;
+  combatEvent("slash", player.x, player.y - 29, .24, { dir: player.face });
   tone(260, 0.075, "triangle");
   for (const e of [...foes])
     if (
@@ -1044,7 +1053,7 @@ function cast(slot) {
     tx = target?.x ?? clamp(x + dir * 132, 0, worldWidth);
   effects.push({
     type: "summon",
-    x: x - dir * 20,
+    x: clamp(x - dir * 38, 20, worldWidth - 20),
     y: player.y - 40,
     id,
     flip: dir < 0,
@@ -1089,7 +1098,7 @@ function cast(slot) {
       life: 0.65,
       max: 0.65,
     });
-    for (const e of [...foes]) if (Math.abs(e.x - x) < 230) hitFoe(e, dmg);
+    for (const e of [...foes]) if (Math.abs(e.x - x) < 230) hitFoe(e, dmg, id);
   } else {
     let count = id === 3 ? 3 : 1;
     for (let i = 0; i < count; i++)
@@ -1098,6 +1107,7 @@ function cast(slot) {
         x: x + dir * 20,
         y: y + (i - 1) * (count > 1 ? 9 : 0),
         vx: dir * (id === 4 ? 240 : 340),
+        lane: i,
         vy: count > 1 ? (i - 1) * 20 : 0,
         life: 1.55,
         dir,
@@ -1105,17 +1115,25 @@ function cast(slot) {
         team: 0,
       });
   }
-  if (id === 2) hp = Math.min(100, hp + 10);
+  if (id === 2) {
+    hp = Math.min(100, hp + 10);
+    combatEvent("heal", x, player.y, .55);
+  }
   statusBars();
+}
+function attackPattern(e) {
+  return e.kind === 4 ? e.step % 4 : e.kind;
 }
 function enemyShot(e) {
   e.action = 0.38;
-  let k = e.kind === 4 ? [0, 1, 2, 3][e.step++ % 4] : e.kind;
+  const k = attackPattern(e);
+  if (e.kind === 4) e.step++;
   let dir = player.x >= e.x ? 1 : -1;
   if (k === 1 || k === 3) {
     for (let n = 0; n < (k === 3 ? 3 : 1); n++)
       shots.push({
         team: 1,
+        rift: e.kind === 4,
         id: k,
         x: e.markedX + (k === 3 ? (n - 1) * 51 : 0),
         y: GROUND - 205 - n * 13,
@@ -1127,6 +1145,7 @@ function enemyShot(e) {
   } else
     shots.push({
       team: 1,
+      rift: e.kind === 4,
       id: k,
       x: e.x + dir * 28,
       y: GROUND - (k === 2 ? 10 : 29),
@@ -1176,6 +1195,7 @@ function step(dt) {
     p.leapTime = 0.1;
     p.buffer = 0;
     spark(p.x, p.y, "#d5f5ff", 5);
+    combatEvent(p.jumps === 2 ? "doubleJump" : "jump", p.x, p.y, .36);
     tone(p.jumps === 1 ? 520 : 710, 0.07);
   }
   const oldY = p.y,
@@ -1190,7 +1210,10 @@ function step(dt) {
         )
       : null;
   if (landing || p.y >= GROUND) {
-    if (!wasGrounded && p.vy > 70) p.landTime = 0.09;
+    if (!wasGrounded && p.vy > 70) {
+      p.landTime = 0.09;
+      combatEvent("land", p.x, landing ? landing.y : GROUND, .29);
+    }
     p.y = landing ? landing.y : GROUND;
     p.vy = 0;
     p.jumps = 0;
@@ -1259,6 +1282,7 @@ function step(dt) {
   if (modal) return;
   for (let s of [...shots]) {
     s.life -= dt;
+    s.age = (s.age || 0) + dt;
     if (s.id === 5 && !s.team) {
       let t = foes.find((e) => Math.abs(e.x - s.x) < 225);
       if (t) {
@@ -1266,15 +1290,21 @@ function step(dt) {
         s.vx = Math.cos(a) * 290;
         s.vy = Math.sin(a) * 290;
       }
+      if (!reducedMotion.matches && Math.floor(s.age * 18) !== Math.floor((s.age - dt) * 18)) {
+        s.trail ??= [];
+        s.trail.unshift({ x: s.x, y: s.y, flip: s.vx < 0 });
+        if (s.trail.length > 5) s.trail.pop();
+      }
     }
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     if (s.team) {
-      if (Math.abs(s.x - p.x) < 21 && Math.abs(s.y - (p.y - 23)) < 24) {
-        hurt(s.dmg);
+      const contact = Math.abs(s.x - p.x) < 21 && Math.abs(s.y - (p.y - 23)) < 24;
+      if (contact || s.y > GROUND) {
+        if (contact) hurt(s.dmg);
         s.life = 0;
+        combatEvent("enemyImpact", s.x, Math.min(GROUND - 3, s.y), .32, { id: s.id, rift: s.rift });
       }
-      if (s.y > GROUND) s.life = 0;
     } else if (s.area) {
       if (s.y >= GROUND - 25) {
         s.life = 0;
@@ -1287,7 +1317,7 @@ function step(dt) {
           max: 0.45,
         });
         for (let e of [...foes])
-          if (Math.abs(e.x - s.x) < s.area) hitFoe(e, s.dmg);
+          if (Math.abs(e.x - s.x) < s.area) hitFoe(e, s.dmg, s.id);
       }
     } else {
       let e = foes.find(
@@ -1297,7 +1327,7 @@ function step(dt) {
       );
       if (e) {
         if (s.id === 4) e.slow = 2.2;
-        hitFoe(e, s.dmg);
+        hitFoe(e, s.dmg, s.id);
         s.life = 0;
       }
     }

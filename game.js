@@ -132,6 +132,63 @@ function notify(msg) {
   $("toast").classList.add("on");
   toastUntil = performance.now() + 2600;
 }
+const musicTracks = { campus: $("campus-music"), battle: $("battle-music") };
+let musicEnabled = true, musicUnlocked = false;
+let musicTrack = "", musicFade = 0;
+function sceneMusic() {
+  return scene.type === "arena" || (scene.type === "roof" && !progress.won) ? "battle" : "campus";
+}
+function crossfadeMusic(incoming, outgoing) {
+  const from = incoming.volume, other = outgoing.volume, start = performance.now();
+  // Some mobile players reserve volume control for the device.
+  if (from === 1 && !outgoing.paused && other === 1) outgoing.pause();
+  function fade(now) {
+    const t = clamp((now - start) / 320, 0, 1);
+    incoming.volume = from + (1 - from) * t;
+    outgoing.volume = other * (1 - t);
+    if (t < 1) musicFade = requestAnimationFrame(fade);
+    else outgoing.pause();
+  }
+  musicFade = requestAnimationFrame(fade);
+}
+function pauseMusic() {
+  cancelAnimationFrame(musicFade);
+  for (const track of Object.values(musicTracks)) track.pause();
+}
+function syncMusic() {
+  if (!musicEnabled || !musicUnlocked || document.hidden) {
+    pauseMusic();
+    return;
+  }
+  const track = sceneMusic();
+  const incoming = musicTracks[track], outgoing = track === "campus" ? musicTracks.battle : musicTracks.campus;
+  if (musicTrack === track && !incoming.paused) return;
+  cancelAnimationFrame(musicFade);
+  musicTrack = track;
+  if (!incoming.hasAttribute("src")) incoming.src = "assets/audio/" + track + ".mp3";
+  if (incoming.paused) incoming.volume = 0;
+  incoming.play().then(() => {
+    if (musicTrack !== track || incoming.paused || !musicEnabled || document.hidden) return;
+    cancelAnimationFrame(musicFade);
+    crossfadeMusic(incoming, outgoing);
+  }).catch(error => {
+    if (musicTrack !== track || error.name === "AbortError") return;
+    pauseMusic();
+    if (error.name === "NotAllowedError") musicUnlocked = false;
+  });
+}
+function unlockMusic(event) {
+  if (!event.isTrusted || musicUnlocked) return;
+  musicUnlocked = true;
+  syncMusic();
+}
+// Touch grants media activation on release. A paused track keeps its playhead without an HTTP seek.
+for (const event of ["keydown", "pointerup", "click"]) {
+  document.addEventListener(event, unlockMusic, true);
+}
+document.addEventListener("visibilitychange", syncMusic);
+window.addEventListener("pagehide", pauseMusic);
+window.addEventListener("pageshow", syncMusic);
 function tone(freq = 360, duration = 0.1, type = "sine") {
   if (!sound) return;
   try {
@@ -176,6 +233,7 @@ function save() {
         hp,
         mp,
         sound,
+        musicEnabled,
         sceneryPaused,
         encounter,
       }),
@@ -238,6 +296,7 @@ function load() {
     hp = clamp(Number(d.hp) || 100, 1, 100);
     mp = clamp(Number(d.mp) || 0, 0, 60);
     sound = !!d.sound;
+    musicEnabled = d.musicEnabled !== false;
     sceneryPaused = d.sceneryPaused === true;
     resumeFoe = d.encounter;
   } catch {}
@@ -525,6 +584,7 @@ function menu() {
     <section aria-labelledby="settings-title">
     <h3 class="choice-title" id="settings-title">설정</h3>
     <div class="settings-list">
+      <button class="rowbtn" id="music" aria-pressed="${musicEnabled}">배경음악<b class="switch-state">${musicEnabled ? "켜짐" : "꺼짐"}</b></button>
       <button class="rowbtn" id="sound" aria-pressed="${sound}">효과음<b class="switch-state">${sound ? "켜짐" : "꺼짐"}</b></button>
       <button class="rowbtn" id="full">전체화면<b class="switch-state"></b></button>
       <button class="rowbtn" id="motion"><span>배경 움직임</span><b class="switch-state"></b></button>
@@ -536,6 +596,13 @@ function menu() {
   $("toequip").onclick = () => showEquip();
   $("toquest").onclick = showQuest;
   $("help").onclick = showHelp;
+  $("music").onclick = () => {
+    musicEnabled = !musicEnabled;
+    $("music").setAttribute("aria-pressed", String(musicEnabled));
+    $("music").lastElementChild.textContent = musicEnabled ? "켜짐" : "꺼짐";
+    syncMusic();
+    save();
+  };
   $("sound").onclick = () => {
     sound = !sound;
     $("sound").setAttribute("aria-pressed", String(sound));
@@ -935,6 +1002,7 @@ function setScene() {
     foes = [enemy(650, scene.subject, true)];
   near = findNear();
   refresh();
+  syncMusic();
 }
 // Travel commits immediately for saves, dialogue and controls. The renderer keeps
 // the last field frame on screen until the departure fade reaches full opacity.
@@ -971,6 +1039,7 @@ function winBoss(i) {
   shots = [];
   if (i === 4) {
     progress.won = true;
+    syncMusic();
     save();
     refresh();
     dialogue(

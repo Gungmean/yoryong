@@ -1,6 +1,6 @@
 "use strict";
 const cv = $("world"),
-  g = cv.getContext("2d", { alpha: false }),
+  g = cv.getContext("2d", { alpha: true }),
   lettering = $("field-lettering"),
   ink = lettering.getContext("2d"),
   mini = $("mapview").getContext("2d");
@@ -216,12 +216,14 @@ function backdrop(name, w, h, offset, dressTile) {
     g.restore();
   }
 }
-function gate() {
-  backdrop("campus", clamp(W, 670, 920), H, cam * 0.58, (w) => {
-    pennant(w * .11, 294, 70, sceneryTime, "#27467b");
-    pennant(w * .91, 294, 74, sceneryTime + .5, "#46618f");
-  });
-  campusAir(sceneryTime);
+function gate(depth) {
+  if (!depth) {
+    backdrop("campus", clamp(W, 670, 920), H, cam * 0.58, (w) => {
+      pennant(w * .11, 294, 70, sceneryTime, "#27467b");
+      pennant(w * .91, 294, 74, sceneryTime + .5, "#46618f");
+    });
+    campusAir(sceneryTime);
+  }
   const sx = 650 - cam;
   shadow(sx, GROUND + 1, 23);
   for (let i = 0; i < 4; i++) {
@@ -294,7 +296,7 @@ function hallPlaque(bay, x) {
   r(left + width - 3, 96, 1, 1, "#dfc995");
   word(title, x, 97, 9, "#faf0d8");
 }
-function hall() {
+function hallBackdrop() {
   const im = assets.corridor,
     bays = hallBays[scene.floor],
     stairTile = assets["stair/hall"];
@@ -400,6 +402,13 @@ function hall() {
     g.restore();
     if (bay.type !== "stair")
       corridorExhibit(x, left, right, j - 1, sceneryTime);
+  }
+}
+function hall(depth) {
+  if (!depth) hallBackdrop();
+  for (const bay of hallBays[scene.floor]) {
+    const x = Math.round(bay.x - cam);
+    if (x < -90 || x > W + 90) continue;
     hallPlaque(bay, x);
     if (["물리지학실", "생명화학실", "중앙 현관", "매점"].includes(bay.name))
       star(x, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.4, 3, "#ffe593");
@@ -740,17 +749,21 @@ function render() {
   ink.clearRect(0, 0, lettering.width, lettering.height);
   ink.save();
   g.imageSmoothingEnabled = false;
+  g.clearRect(0, 0, W, H);
   g.save();
-  if (!reducedMotion.matches && shake > 0.5) {
-    const offset = Math.round(Math.sin(clock * 93) * shake);
+  const offset = !reducedMotion.matches && shake > 0.5 ? Math.round(Math.sin(clock * 93) * shake) : 0;
+  const depth = typeof campusWorld !== "undefined" && campusWorld.draw(offset);
+  if (offset) {
     g.translate(offset, 0);
     ink.translate(Math.round(offset * inkScaleX), 0);
   }
-  if (scene.type === "gate") gate();
-  else if (scene.type === "floor") hall();
-  else battleBack();
-  if(scene.type!=="floor")endStairArt();
-  drawPlatforms();
+  if (scene.type === "gate") gate(depth);
+  else if (scene.type === "floor") hall(depth);
+  else if (!depth) battleBack();
+  if (!depth) {
+    if (scene.type !== "floor") endStairArt();
+    drawPlatforms();
+  }
   monsters();
   character();
   particles();

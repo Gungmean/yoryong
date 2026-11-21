@@ -1,7 +1,14 @@
 "use strict";
 const iconCache = {};
 const iconTiles = {};
+const schoolTiles = {};
+for (const name of ["globe", "rose", "zelkova"]) {
+  const tile = new Image();
+  tile.src = "assets/ui/" + name + ".png";
+  schoolTiles[name] = tile;
+}
 function icon(name) {
+  if (schoolTiles[name]) return schoolTiles[name].src;
   if (iconCache[name]) return iconCache[name];
   const c = document.createElement("canvas");
   c.width = c.height = 24;
@@ -55,35 +62,34 @@ function icon(name) {
   };
   const gold = "#edc677",
     white = "#f9efce";
-  const mint = "#8ddbc0", deep = "#23544e", brass = "#ae7742";
-  if (name === "compass" || name === "crest") {
-    poly([[6,1],[17,1],[22,6],[22,16],[17,21],[12,23],[6,21],[1,16],[1,6]], brass);
-    poly([[6,1],[17,1],[22,6],[22,15],[17,20],[12,22],[6,20],[1,15],[1,6]], gold);
-    poly([[7,3],[16,3],[20,7],[20,14],[16,18],[12,20],[7,18],[3,14],[3,7]], deep);
-    // A compass rose cut into the brass school badge.
-    poly([[12,2],[14,9],[21,11],[14,13],[12,20],[10,13],[3,11],[10,9]], mint);
-    poly([[12,2],[12,11],[10,9]], white);
-    poly([[12,11],[21,11],[14,13]], gold);
-    poly([[12,11],[12,20],[10,13]], gold);
-    rect(11,10,3,3,white);
-  }
+  const mint = "#d0de9c", deep = "#233d72", brass = "#aa7639";
   if (name.startsWith("seal-") || name.startsWith("earned-")) {
     const [state, subject] = name.split("-");
     const earned = state === "earned";
-    const rim = earned ? "#f8d985" : "#799f94";
-    poly([[6,1],[17,1],[22,6],[22,17],[17,22],[6,22],[1,17],[1,6]], earned ? brass : "#2c5350");
-    poly([[6,1],[17,1],[22,6],[22,15],[17,20],[6,20],[1,15],[1,6]], rim);
-    poly([[7,3],[16,3],[20,7],[20,14],[16,18],[7,18],[3,14],[3,7]], earned ? "#574a37" : "#294a48");
+    // Each discipline hangs from a pair of school-blue ribbon tails.
+    poly([[6,12],[12,13],[11,23],[8,20],[4,22]],earned ? "#456cb3" : "#697890");
+    poly([[12,13],[18,12],[20,22],[16,20],[14,23]],earned ? "#30548e" : "#50637e");
+    const rim = earned ? "#f8d27a" : "#a2b3c9";
+    const disk = (radius, color) => {
+      g.fillStyle = color;
+      for (let y = -radius; y <= radius; y++) {
+        const span = Math.floor(Math.sqrt(radius * radius - y * y));
+        g.fillRect(12-span, 10+y, span*2+1, 1);
+      }
+    };
+    disk(10,deep); disk(9,rim); disk(7,earned ? "#3b5078" : "#344563");
     icon(subject);
     g.imageSmoothingEnabled = false;
-    g.drawImage(iconTiles[subject], 4, 3, 16, 16);
-    rect(7,1,9,1,earned ? white : "#b0c3a6");
-    dot(18,17,earned ? white : "#a9ba9c");
+    g.drawImage(iconTiles[subject], 5, 3, 14, 14);
+    rect(9,2,5,1,earned ? white : "#d3dae6");
+    dot(18,15,earned ? white : "#c8cfda");
   }
   if (name === "slots") {
-    for (const x of [1, 9, 17]) {
-      rect(x,6,6,12,mint);
-      rect(x+1,8,4,7,deep);
+    poly([[4,5],[19,5],[22,8],[22,17],[19,20],[4,20],[1,17],[1,8]],deep);
+    line(4,6,18,6,gold);
+    for (const x of [4, 10, 16]) {
+      rect(x,9,4,7,"#89a3c2");
+      rect(x+1,10,2,4,x===4 ? gold : "#38517e");
     }
   }
   if (name === "map") {
@@ -211,11 +217,16 @@ function icon(name) {
     rect(9, 7, 6, 5, "#393443");
   }
   if (name === "quest") {
-    rect(5, 3, 14, 17, "#805e39");
-    rect(4, 2, 14, 16, gold);
-    rect(8, 5, 7, 2, "#846241");
-    rect(8, 9, 6, 2, "#846241");
-    rect(8, 13, 4, 2, "#846241");
+    rect(3,2,17,20,"#162952");
+    rect(4,3,15,17,"#34528a");
+    rect(5,3,2,16,gold);
+    rect(8,4,10,1,"#809ac0");
+    rect(5,19,14,2,white);
+    rect(14,17,3,6,"#d78497");
+    poly([[9,9],[10,7],[13,6],[15,7],[17,8],[16,12],[13,14],[10,13]],"#eea4b2");
+    line(11,9,14,8,"#ffe2cf");
+    rect(12,10,2,2,"#ae5975");
+    line(12,15,15,13,"#c9dc90");
   }
   if (name === "sword") {
     line(4, 20, 18, 6, "#212735", 4);

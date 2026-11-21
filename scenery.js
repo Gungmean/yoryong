@@ -95,9 +95,10 @@ function corridorExhibit(x, left, right, roomIndex, time) {
       r(mount-10,64,22,2,"#7a674c");
       path([[mount-8,66],[mount+9,66],[mount+9,y+24],[mount+1,y+29],[mount-8,y+24]], color);
       r(mount-6,68,13,1,"#e2c999");
-      const symbol = floor === 1 ? "compass" : subjectIcons[floor - 2];
+      const symbol = floor === 1 ? "globe" : subjectIcons[floor - 2];
       icon(symbol);
-      g.drawImage(iconTiles[symbol], Math.round(mount - 5), Math.round(y + 2), 12, 12);
+      const tile = schoolTiles[symbol] || iconTiles[symbol];
+      if (tile.width) g.drawImage(tile, Math.round(mount - 5), Math.round(y + 2), 12, 12);
       word(floor + "F",mount+1,y+19,7,"#f8e7b8");
     }
   }

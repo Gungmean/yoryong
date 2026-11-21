@@ -28,10 +28,10 @@ function label(t, x, y, color = "#f6e6bb", bg = "#252936", size = 9) {
   g.font = size + "px Galmuri, monospace";
   const w = Math.ceil(g.measureText(t).width) + 12;
   const left = x - w / 2, h = size + 6;
-  r(left + 1, y, w - 2, h, "#b7b28a");
-  r(left, y + 1, w, h - 2, "#253d38");
+  r(left + 1, y, w - 2, h, "#bba16c");
+  r(left, y + 1, w, h - 2, "#243658");
   r(left + 1, y + 1, w - 2, h - 2, bg);
-  r(left + 2, y + 1, 3, 1, "#cabc8c");
+  r(left + 2, y + 1, 3, 1, "#f3ce83");
   word(t, x, y + h / 2, size, color);
   return w;
 }
@@ -163,8 +163,8 @@ function backdrop(name, w, h, offset, dressTile) {
 }
 function gate() {
   backdrop("campus", clamp(W, 670, 920), H, cam * 0.58, (w) => {
-    pennant(w * .11, 294, 70, sceneryTime, "#39726c");
-    pennant(w * .91, 294, 74, sceneryTime + .5, "#688999");
+    pennant(w * .11, 294, 70, sceneryTime, "#27467b");
+    pennant(w * .91, 294, 74, sceneryTime + .5, "#46618f");
   });
   campusAir(sceneryTime);
   const sx = 650 - cam;
@@ -540,10 +540,11 @@ function miniMap() {
     mini.fillRect(Math.round(x), Math.round(y), Math.round(width), Math.round(height));
   };
   const u = x => 5 + x * (w - 10) / worldWidth;
-  const ink = "#4c7569", grass = "#9fbd95", paper = "#cbd5ac", road = "#f4e2b3";
+  const ink = "#435879", grass = "#a3b783", paper = "#f3e6c8", road = "#fbd88f";
+  mini.imageSmoothingEnabled = false;
   rect(0, 0, w, h, paper);
-  for (let i = 0; i < w; i += 9) rect(i, 0, 1, h, "#b6c7a4");
-  for (let i = 0; i < h; i += 9) rect(0, i, w, 1, "#b6c7a4");
+  for (let i = 0; i < w; i += 9) rect(i, 0, 1, h, "#e3d5b5");
+  for (let i = 0; i < h; i += 9) rect(0, i, w, 1, "#e3d5b5");
   let routeY = 32;
   const route = () => {
     rect(0, routeY-2, w, 6, ink);
@@ -562,10 +563,13 @@ function miniMap() {
     rect(u(650)-4,16,9,9,ink);
     rect(u(650)-2,18,5,19,road);
     route();
-    for (const x of [6,15,160,169]) {
-      for (const y of [8,20]) {
-        rect(x,y,6,5,ink); rect(x+1,y-2,4,5,"#83a482");
-      }
+    if (schoolTiles.zelkova.naturalWidth) {
+      for (const x of [1, 14, 148, 160])
+        mini.drawImage(schoolTiles.zelkova, x, x % 2 ? 9 : 3, 15, 12);
+    }
+    for (const x of [4,18,144,158]) {
+      rect(x,24,13,3,"#82945c");
+      rect(x+2,23,2,2,"#d98b99"); rect(x+8,24,2,2,"#f0adae");
     }
   } else if (scene.type === "floor") {
     for (const [x,name] of floors[scene.floor]) {

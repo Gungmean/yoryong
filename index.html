@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-    <meta name="theme-color" content="#142f32">
+    <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
     <link rel="stylesheet" href="style.css">
@@ -17,7 +17,7 @@
           <div class="map-window">
             <div class="map-head">
               <button id="minimap" data-tip="캠퍼스 지도 (M)">
-                <i data-icon="pin"></i><b id="maptitle"></b>
+                <i data-icon="zelkova"></i><b id="maptitle"></b>
               </button>
               <button id="mapfold" aria-controls="mapview" aria-label="미니맵 접기" aria-expanded="true"></button>
             </div>
@@ -26,16 +26,16 @@
           <div id="bossbar" hidden><i data-icon="rift"></i><span><b id="bossname"></b><span class="boss-track"><i id="bossfill"></i></span></span></div>
           <nav class="field-tools" aria-label="모험 정보">
             <button id="quest"><i data-icon="quest"></i><span id="qtitle"></span></button>
-            <button id="menu" aria-label="모험 메뉴" data-tip="모험 메뉴 (Esc)"><i data-icon="menu"></i></button>
+            <button id="menu" aria-label="모험 메뉴" data-tip="모험 메뉴 (Esc)"><i data-icon="globe"></i><span>메뉴</span></button>
           </nav>
         </div>
         <div id="toast" role="status"></div>
       </section>
       <section class="dock" aria-label="캐릭터 상태와 조작">
         <div class="player" role="group" aria-label="요룡이 상태">
-          <div class="face"><img src="assets/hero.png" alt=""></div>
+          <img class="field-badge" src="assets/ui/globe.png" width="40" height="40" alt="">
           <div class="stats">
-            <div class="name"><small id="level"></small><b>요룡이</b></div>
+            <div class="name"><small id="level"></small><b>요룡이</b><span class="school-name">부광고등학교</span></div>
             <div class="statline"><b>HP</b><span class="track hp"><i id="hpbar"></i></span><small id="hpval"></small></div>
             <div class="statline"><b>MP</b><span class="track mp"><i id="mpbar"></i></span><small id="mpval"></small></div>
           </div>

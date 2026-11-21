@@ -248,10 +248,10 @@ function refresh() {
   const sbutton = (key, id) => {
     const basic = key === "A", empty = !basic && id == null;
     const name = basic ? "기본 공격" : empty ? "빈 슬롯 · 스킬 배치" : scholars[id][1];
-    const src = basic ? icon("sword") : empty ? icon("lock") : "assets/skill" + id + ".png";
+    const src = basic ? icon("sword") : empty ? null : "assets/skill" + id + ".png";
     return `<button class="slot ${empty ? "locked" : "active"}" data-slot="${key}"
        aria-label="${key} · ${name}" data-tip="${name}">
-       <img class="slot-art" src="${src}" alt=""><kbd>${key}</kbd><span class="timer"></span></button>`;
+       ${src ? `<img class="slot-art" src="${src}" alt="">` : ""}<kbd>${key}</kbd><span class="timer"></span></button>`;
   };
   $("slots").innerHTML =
     sbutton("A", -1) +
@@ -290,11 +290,12 @@ function show(kind, title, body, canClose = true) {
   player.vx = 0;
   player.buffer = 0;
   $("overlay").hidden = false;
-  const marks = { menu: "compass", map: "map", equip: "slots", quest: "quest",
-    stairs: "stairs", lab: "flask", down: "leaf", ending: "crest", seal: "crest",
-    dialogue: "quest", quiz: "atom", help: "map", reset: "compass" };
+  const marks = { menu: "globe", map: "zelkova", equip: "slots", quest: "quest",
+    stairs: "stairs", lab: "flask", down: "rose", ending: "globe", seal: "globe",
+    dialogue: "quest", quiz: "atom", help: "map", reset: "globe" };
   $("panel").innerHTML = `<div class="panel-head"><i data-icon="${marks[kind]}"></i>
-    <h2 id="paneltitle">${title}</h2>
+    <div class="book-title"><h2 id="paneltitle">${title}</h2>
+    ${kind === "menu" ? '<p>부광고등학교 <span>창의(創意)</span></p>' : ''}</div>
     ${canClose ? '<button class="close" aria-label="닫기" data-close><i data-icon="close"></i></button>' : ''}
     </div><div class="panel-body">${body}</div>`;
   decorate($("panel"));
@@ -464,11 +465,13 @@ function menu() {
       <button class="rowbtn" id="tomap"><i data-icon="map"></i>캠퍼스 지도<kbd>M</kbd></button>
       <button class="rowbtn" id="toequip"><i data-icon="slots"></i>스킬 배치<kbd>K</kbd></button>
       <button class="rowbtn" id="toquest"><i data-icon="quest"></i>모험 일지 · 인장</button>
-      <button class="rowbtn" id="help"><i data-icon="compass"></i>조작 안내</button>
+      <button class="rowbtn" id="help"><i data-icon="globe"></i>조작 안내</button>
     </div>
-    <button class="rowbtn" id="sound" aria-pressed="${sound}">효과음<b class="switch-state">${sound ? "켜짐" : "꺼짐"}</b></button>
-    <button class="rowbtn" id="full">전체화면<b class="switch-state"></b></button>
-    <button class="rowbtn" id="motion"><span>배경 움직임</span><b class="switch-state"></b></button>
+    <div class="settings-list">
+      <button class="rowbtn" id="sound" aria-pressed="${sound}">효과음<b class="switch-state">${sound ? "켜짐" : "꺼짐"}</b></button>
+      <button class="rowbtn" id="full">전체화면<b class="switch-state"></b></button>
+      <button class="rowbtn" id="motion"><span>배경 움직임</span><b class="switch-state"></b></button>
+    </div>
     <p class="save-note"><i data-icon="save"></i><span id="savestatus">${saveMessage}</span></p>
     <button class="text-action" id="reset">처음부터 다시 시작</button>`);
   $("resume").onclick = closePanel;

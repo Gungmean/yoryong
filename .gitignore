@@ -1,0 +1,8 @@
+/메인캐릭터사진(요룡이)/
+/assets/*.png
+!/assets/hero.png
+!/assets/scholar[0-7].png
+!/assets/skill[0-7].png
+!/assets/effect[0-7].png
+!/assets/foe[0-5].png
+/*.zip

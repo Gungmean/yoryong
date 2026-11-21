@@ -2,6 +2,7 @@
 const $ = (id) => document.getElementById(id),
   clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const SAVE = "bugwang-quest-v1",
+  GATE_START = 240,
   GROUND = 318,
   STAIR = 1110;
 let W = 800,
@@ -16,7 +17,7 @@ let W = 800,
 let scene = { type: "gate", floor: 0, subject: -1 },
   worldWidth = 1140;
 let player = {
-  x: 240,
+  x: GATE_START,
   y: GROUND,
   vy: 0,
   vx: 0,
@@ -29,13 +30,11 @@ let player = {
   attackCD: 0,
   buffer: 0,
 };
-let progress = {
-  learned: [],
-  cleared: [],
-  slots: [null, null, null, null],
-  won: false,
-  intro: false,
-};
+function newProgress() {
+  return { learned: [], cleared: [], slots: [null, null, null, null], won: false, intro: false };
+}
+let progress = newProgress();
+let runGeneration = 0;
 let hp = 100,
   mp = 60,
   keys = new Set(),
@@ -157,14 +156,20 @@ function tone(freq = 360, duration = 0.1, type = "sine") {
     osc.stop(audio.currentTime + duration);
   } catch {}
 }
+function parseSave(raw) {
+  try { return JSON.parse(raw); } catch { return null; }
+}
 function save() {
   try {
+    // A background tab can autosave or close before its storage event arrives.
+    if (parseSave(localStorage.getItem(SAVE))?.generation > runGeneration) return;
     const boss = foes.find((e) => e.boss);
     const encounter =
       boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp } : null;
     localStorage.setItem(
       SAVE,
       JSON.stringify({
+        generation: runGeneration,
         progress,
         scene,
         x: player.x,
@@ -184,13 +189,14 @@ function save() {
 }
 function load() {
   try {
-    const d = JSON.parse(localStorage.getItem(SAVE));
+    const d = parseSave(localStorage.getItem(SAVE));
     if (
       !d ||
       !Array.isArray(d.progress?.learned) ||
       !Array.isArray(d.progress?.slots)
     )
       return;
+    runGeneration = Number.isSafeInteger(d.generation) ? d.generation : 0;
     const ids = (a, n) => [
       ...new Set(
         (Array.isArray(a) ? a : []).filter(
@@ -228,7 +234,7 @@ function load() {
       scene = { type: "arena", floor: 1, subject: s.subject };
     if (s.type === "roof" && progress.cleared.length === 4)
       scene = { type: "roof", floor: 6, subject: 4 };
-    player.x = Number.isFinite(d.x) ? d.x : 240;
+    player.x = Number.isFinite(d.x) ? d.x : GATE_START;
     hp = clamp(Number(d.hp) || 100, 1, 100);
     mp = clamp(Number(d.mp) || 0, 0, 60);
     sound = !!d.sound;
@@ -344,9 +350,13 @@ function show(kind, title, body, canClose = true) {
   decorate($("panel"));
   $("panel")
     .querySelector("[data-close]")
-    ?.addEventListener("click", closePanel);
+    ?.addEventListener("click", dismissPanel);
   $("panel").scrollTop = 0;
   ($("panel").querySelector(".panel-body button:not(:disabled)") || $("panel").querySelector("button"))?.focus({ preventScroll: true });
+}
+function dismissPanel() {
+  if (modal === "reset") $("cancel").click();
+  else closePanel();
 }
 function closePanel() {
   modal = "";
@@ -512,13 +522,15 @@ function menu() {
       <button class="rowbtn" id="toquest"><i data-icon="quest"></i>모험 일지 · 인장</button>
       <button class="rowbtn" id="help"><i data-icon="globe"></i>조작 안내</button>
     </div>
+    <section aria-labelledby="settings-title">
+    <h3 class="choice-title" id="settings-title">설정</h3>
     <div class="settings-list">
       <button class="rowbtn" id="sound" aria-pressed="${sound}">효과음<b class="switch-state">${sound ? "켜짐" : "꺼짐"}</b></button>
       <button class="rowbtn" id="full">전체화면<b class="switch-state"></b></button>
       <button class="rowbtn" id="motion"><span>배경 움직임</span><b class="switch-state"></b></button>
-    </div>
-    <p class="save-note"><i data-icon="save"></i><span id="savestatus">${saveMessage}</span></p>
-    <button class="text-action" id="reset">처음부터 다시 시작</button>`);
+      <button class="rowbtn" id="reset" aria-haspopup="dialog">게임 초기화</button>
+    </div></section>
+    <p class="save-note"><i data-icon="save"></i><span id="savestatus">${saveMessage}</span></p>`);
   $("resume").onclick = closePanel;
   $("tomap").onclick = showMap;
   $("toequip").onclick = () => showEquip();
@@ -539,27 +551,27 @@ function menu() {
     syncMotionSwitch();
     save();
   };
-  $("reset").onclick = () => {
-    show(
-      "reset",
-      "처음부터 시작할까요?",
-      '<p>이 브라우저에 저장된 스킬과 인장이 초기화됩니다.</p><div class="grid"><button class="rowbtn" id="cancel">취소</button><button class="confirm" id="yes">새 모험 시작</button></div>',
-    );
-    $("cancel").onclick = menu;
-    $("yes").onclick = () => {
-      progress = {
-        learned: [],
-        cleared: [],
-        slots: [null, null, null, null],
-        won: false,
-        intro: false,
-      };
-      hp = 100;
-      mp = 60;
-      closePanel();
-      go("gate", 0, 240);
-      save();
-    };
+  $("reset").onclick = confirmReset;
+}
+function confirmReset() {
+  show("reset", "게임을 초기화할까요?",
+    '<p>이 브라우저에서 배운 스킬과 배치, 모은 열쇠와 인장, 보스와 엔딩 기록을 모두 지웁니다. 새 모험은 학교 정문에서 시작합니다.</p>' +
+    '<div class="grid"><button class="rowbtn" id="cancel">취소</button><button class="confirm" id="yes">초기화하고 시작</button></div>');
+  $("cancel").onclick = () => {
+    menu();
+    $("reset").focus();
+  };
+  $("yes").onclick = () => {
+    runGeneration++;
+    progress = newProgress();
+    hp = 100;
+    mp = 60;
+    player.face = 1;
+    shake = 0;
+    closePanel();
+    go("gate", 0, GATE_START);
+    $("world").focus({ preventScroll: true });
+    notify(saveMessage === "자동 저장" ? "새 모험을 시작했습니다." : "이 창에서 새 모험을 시작했습니다. 브라우저에 저장할 수 없습니다.");
   };
 }
 function showHelp() {
@@ -1422,7 +1434,7 @@ function press(code, repeat = false) {
       code === "Escape" &&
       !["down", "ending", "dialogue"].includes(modal)
     )
-      closePanel();
+      dismissPanel();
     else if (!repeat && code === "Enter" && modal === "dialogue")
       $("continue").click();
     return;
@@ -1520,6 +1532,9 @@ window.addEventListener("blur", () => {
   save();
 });
 window.addEventListener("pagehide", save);
+window.addEventListener("storage", (event) => {
+  if (event.key === SAVE && parseSave(event.newValue)?.generation > runGeneration) location.reload();
+});
 document.querySelectorAll("[data-key]").forEach((b) => {
   b.onpointerdown = (e) => {
     e.preventDefault();

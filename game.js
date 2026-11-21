@@ -882,7 +882,18 @@ function setScene() {
   near = findNear();
   refresh();
 }
+// Travel commits immediately for saves, dialogue and controls. The renderer keeps
+// the last field frame on screen until the departure fade reaches full opacity.
+let sceneTransition = null;
 function go(type, f, x, sub = -1) {
+  if (scene.type !== type || scene.floor !== f || scene.subject !== sub) {
+    sceneTransition = {
+      started: performance.now(),
+      initialShade: Number($("scene-shade").style.opacity),
+      arrived: null,
+    };
+    $("scene-arrival").style.opacity = "0";
+  }
   scene = { type, floor: f, subject: sub };
   player.x = x;
   setScene();

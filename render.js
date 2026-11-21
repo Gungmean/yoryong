@@ -648,7 +648,43 @@ function miniMap() {
   rect(px-3,routeY-5,7,6,"#193e3b"); rect(px-1,routeY+1,3,2,"#193e3b");
   rect(px-2,routeY-4,5,4,"#ffce6a"); rect(px-1,routeY-4,2,1,"#fff2c4");
 }
+function holdDepartureFrame() {
+  if (!sceneTransition || sceneTransition.arrived !== null || reducedMotion.matches) return false;
+  const t = clamp((performance.now() - sceneTransition.started) / 160, 0, 1);
+  const start = sceneTransition.initialShade;
+  $("scene-shade").style.opacity = start + (1 - start) * t;
+  return t < 1;
+}
+
+function revealArrival() {
+  if (!sceneTransition) return;
+  const now = performance.now();
+  if (sceneTransition.arrived === null) {
+    sceneTransition.arrived = now;
+    let place = floorName(), detail;
+    if (scene.type === "floor") {
+      detail = scene.floor === 1 ? "중앙 현관 · 과학실" : subjects[scene.floor - 2].name + "의 시련";
+    } else if (scene.type === "arena") {
+      detail = "1층 · " + subjects[scene.subject].lab;
+    } else if (scene.type === "roof") {
+      place = "옥상";
+      detail = progress.won ? "부광의 아침" : "기억의 균열";
+    } else {
+      place = "학교 정문";
+      detail = "부광고등학교";
+    }
+    $("arrival-place").textContent = place;
+    $("arrival-detail").textContent = detail;
+  }
+  const elapsed = now - sceneTransition.arrived;
+  $("scene-shade").style.opacity = reducedMotion.matches ? 0 : 1 - clamp((elapsed - 40) / 250, 0, 1);
+  const remaining = clamp((1500 - elapsed) / 200, 0, 1);
+  $("scene-arrival").style.opacity = reducedMotion.matches ? Number(remaining > 0) : remaining;
+  if (remaining === 0) sceneTransition = null;
+}
+
 function render() {
+  if (holdDepartureFrame()) return;
   if (fieldDpr !== (window.devicePixelRatio || 1)) resize();
   ink.clearRect(0, 0, lettering.width, lettering.height);
   ink.save();
@@ -675,6 +711,7 @@ function render() {
   g.restore();
   ink.restore();
   if (!$("mapview").hidden) miniMap();
+  revealArrival();
 }
 let last = 0,
   acc = 0,
@@ -685,7 +722,7 @@ function tick(ms) {
   if (!modal && !document.hidden && !sceneryPaused && !reducedMotion.matches) sceneryTime += elapsed;
   acc += elapsed;
   while (acc >= 1 / 60) {
-    step(1 / 60);
+    if (!sceneTransition || sceneTransition.arrived !== null || reducedMotion.matches) step(1 / 60);
     acc -= 1 / 60;
   }
   render();

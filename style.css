@@ -53,6 +53,21 @@ kbd {
 #map-depth { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #world { position: relative; display: block; width: 100%; height: 100%; outline: none; }
 #field-lettering { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: auto; }
+#scene-shade, #scene-arrival { position: absolute; pointer-events: none; opacity: 0; }
+#scene-shade { inset: 0; background: #101827; }
+#scene-arrival { inset-inline: 8px; top: 28%; display: flex; justify-content: center; }
+.arrival-sign {
+  display: grid; justify-items: center; gap: 5px; padding: 9px 22px 11px;
+  background: #192a46f5; border-block: 2px solid #d8b570;
+  box-shadow: 3px 0 #263a53, -3px 0 #263a53, 0 3px #102039aa;
+  font-family: Galmuri, "Malgun Gothic", sans-serif; line-height: 1.25; text-align: center;
+}
+#arrival-place { font-size: 24px; color: #fff3d8; font-weight: normal; }
+#arrival-detail { font-size: 12px; color: #f2cd86; }
+@media (min-width: 760px) and (min-height: 560px) {
+  #arrival-place { font-size: 36px; }
+  .arrival-sign { padding: 10px 28px 12px; }
+}
 .hud-top {
   position: absolute; top: max(10px,env(safe-area-inset-top)); left: max(12px,env(safe-area-inset-left));
   right: max(12px,env(safe-area-inset-right)); display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);

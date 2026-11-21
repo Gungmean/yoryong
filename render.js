@@ -26,10 +26,13 @@ function word(t, x, y, size = 9, col = "#fff3d6", align = "center") {
 }
 function label(t, x, y, color = "#f6e6bb", bg = "#252936", size = 9) {
   g.font = size + "px Galmuri, monospace";
-  let w = Math.ceil(g.measureText(t).width) + 12;
-  r(x - w / 2 - 1, y - 1, w + 2, size + 7, "#222631");
-  r(x - w / 2, y, w, size + 5, bg);
-  word(t, x, y + (size + 5) / 2, size, color);
+  const w = Math.ceil(g.measureText(t).width) + 12;
+  const left = x - w / 2, h = size + 6;
+  r(left + 1, y, w - 2, h, "#b7b28a");
+  r(left, y + 1, w, h - 2, "#253d38");
+  r(left + 1, y + 1, w - 2, h - 2, bg);
+  r(left + 2, y + 1, 3, 1, "#cabc8c");
+  word(t, x, y + h / 2, size, color);
   return w;
 }
 function img(n, x, y, w, h, flip = false) {
@@ -134,7 +137,7 @@ function star(x, y, s, col) {
 }
 function resize() {
   const b = cv.getBoundingClientRect();
-  W = Math.max(280, Math.round((b.width * H) / Math.max(1, b.height)));
+  W = Math.max(1, Math.round((b.width * H) / Math.max(1, b.height)));
   cv.width = W;
   cv.height = H;
   g.imageSmoothingEnabled = false;
@@ -142,7 +145,7 @@ function resize() {
 }
 new ResizeObserver(resize).observe(cv);
 resize();
-function backdrop(name, w, h, offset = 0) {
+function backdrop(name, w, h, offset, dressTile) {
   const im = assets[name];
   if (!im?.naturalWidth) {
     r(0, 0, W, H, "#86b9c5");
@@ -151,34 +154,23 @@ function backdrop(name, w, h, offset = 0) {
   for (let n = Math.floor(offset / w); n <= (offset + W) / w; n++) {
     let x = Math.round(n * w - offset);
     g.save();
-    if (n % 2) {
-      g.translate(x + w, 0);
-      g.scale(-1, 1);
-      g.drawImage(im, 0, 0, w, h);
-    } else g.drawImage(im, x, 0, w, h);
+    g.translate(n % 2 ? x + w : x, 0);
+    if (n % 2) g.scale(-1, 1);
+    g.drawImage(im, 0, 0, w, h);
+    dressTile(w);
     g.restore();
   }
 }
 function gate() {
-  const w = Math.max(W, 670);
-  backdrop("campus", w, H, cam * 0.58);
-  for (let k = 0; k < 18; k++) {
-    let range = W + 40,
-      x =
-        ((((k * 131 + clock * ((k % 3) + 1) * 4 - cam * 0.18) % range) +
-          range) %
-          range) -
-        10,
-      y = (k * 39 + clock * (2 + (k % 4))) % 275;
-    if (k % 4 === 0) {
-      r(x, y, 3, 1, "#ffde8d");
-      r(x + 1, y - 1, 2, 1, "#e4bd65");
-    } else if (k % 5 === 0) star(x, y, 1, "#fff0a2");
-  }
+  backdrop("campus", clamp(W, 670, 920), H, cam * 0.58, (w) => {
+    pennant(w * .11, 294, 70, sceneryTime, "#39726c");
+    pennant(w * .91, 294, 74, sceneryTime + .5, "#688999");
+  });
+  campusAir(sceneryTime);
   const sx = 650 - cam;
   shadow(sx, GROUND + 1, 23);
   for (let i = 0; i < 4; i++) {
-    let phase = (clock * 0.6 + i / 4) % 1;
+    let phase = (sceneryTime * 0.6 + i / 4) % 1;
     g.globalAlpha = (1 - phase) * 0.6;
     g.strokeStyle = "#fff0a7";
     g.beginPath();
@@ -195,7 +187,7 @@ function gate() {
   }
   g.globalAlpha = 1;
   if (Math.abs(player.x - 650) > 60) {
-    let y = GROUND - 32 + Math.sin(clock * 2) * 1.4;
+    let y = GROUND - 32 + Math.sin(sceneryTime * 2) * 1.4;
     label("중앙 현관  ›", sx, y, "#fff2c8", "#343c42", 9);
     path(
       [
@@ -264,11 +256,12 @@ function hall() {
       H,
     );
     const sx = x - cam;
+    corridorExhibit(sx, left, right, j, sceneryTime);
     if (name === "계단") stair(sx);
     else {
       label(name, sx, 99, "#e4ecdd", "#354e4e", 10);
       if (["물리지학실", "생명화학실", "중앙 현관", "매점"].includes(name))
-        star(sx, GROUND - 46 + Math.sin(clock * 2) * 1.6, 3, "#ffe593");
+        star(sx, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.6, 3, "#ffe593");
     }
   }
   if (cam + W > worldWidth) r(worldWidth - cam, 0, W, H, "#777b72");
@@ -298,7 +291,19 @@ function hall() {
 }
 function battleBack() {
   const roof = scene.type === "roof";
-  backdrop(roof ? "roof" : "lab", Math.max(680, W), H, cam * 0.32);
+  backdrop(roof ? "roof" : "lab", clamp(W, 680, 960), H, cam * .32, (w) => {
+    if (roof) roofSky(0, w, sceneryTime, progress.won);
+    else {
+      chalkExperiment(w * .53, 168, sceneryTime, scene.subject);
+      labExhibit(w * .37, 234, sceneryTime, scene.subject);
+      // Each discipline lights the existing brass instrument above the blackboard.
+      const cx = w * .5, cy = 81, c = subjects[scene.subject].color;
+      for (let i = 0; i < 3; i++) {
+        const angle = sceneryTime * .7 + i * Math.PI * 2 / 3;
+        star(cx + Math.cos(angle) * w * .056, cy + Math.sin(angle) * 29, 2, c);
+      }
+    }
+  });
   if (!roof) {
     let c = ["#4188ad", "#a45ca7", "#4d9e5c", "#e29b4e"][scene.subject];
     g.globalAlpha = 0.085;
@@ -315,9 +320,9 @@ function battleBack() {
       9,
     );
   for (let i = 0; i < 22; i++) {
-    let x = (i * 107 - cam * 0.3 + W * 2) % W,
-      y = (i * 37 - clock * (4 + (i % 4)) + H * 90) % H;
-    g.globalAlpha = 0.3 + (0.4 * (1 + Math.sin(i + clock))) / 2;
+    let x = wrap(i * 107 - cam * 0.3, W),
+      y = wrap(i * 37 - sceneryTime * (4 + (i % 4)), 212);
+    g.globalAlpha = 0.22 + (0.24 * (1 + Math.sin(i + sceneryTime))) / 2;
     star(x, y, i % 7 === 0 ? 2 : 1, subjects[scene.subject].color);
   }
   g.globalAlpha = 1;
@@ -529,58 +534,69 @@ function particles() {
   }
 }
 function miniMap() {
-  const m = mini,
-    w = 168,
-    h = 47;
-  const mr = (x, y, ww, hh, c) => {
-    m.fillStyle = c;
-    m.fillRect(Math.round(x), Math.round(y), ww, hh);
+  const w = mini.canvas.width, h = mini.canvas.height;
+  const rect = (x, y, width, height, color) => {
+    mini.fillStyle = color;
+    mini.fillRect(Math.round(x), Math.round(y), Math.round(width), Math.round(height));
+  };
+  const u = x => 5 + x * (w - 10) / worldWidth;
+  const ink = "#4c7569", grass = "#9fbd95", paper = "#cbd5ac", road = "#f4e2b3";
+  rect(0, 0, w, h, paper);
+  for (let i = 0; i < w; i += 9) rect(i, 0, 1, h, "#b6c7a4");
+  for (let i = 0; i < h; i += 9) rect(0, i, w, 1, "#b6c7a4");
+  let routeY = 32;
+  const route = () => {
+    rect(0, routeY-2, w, 6, ink);
+    rect(0, routeY-1, w, 4, road);
+  };
+  const building = (x,y,bw,bh) => {
+    rect(x+1,y+2,bw,bh,"#9cb093");
+    rect(x,y,bw,bh,ink);
+    rect(x+1,y+1,bw-2,bh-2,grass);
   };
   if (scene.type === "gate") {
-    mr(0, 0, w, h, "#8db2bf");
-    for (let j = 0; j < 15; j++) {
-      let y = 20 - Math.floor(Math.abs(Math.sin(j * 0.54)) * 8);
-      mr(j * 13, y, 16, 31, "#779a92");
-      mr(j * 13 + 3, y - 3, 10, 4, "#779a92");
+    building(32,7,112,13);
+    building(23,7,15,19);
+    building(139,7,15,19);
+    for (let i = 44; i < 136; i += 9) rect(i,10,5,3,"#d7ddbc");
+    rect(u(650)-4,16,9,9,ink);
+    rect(u(650)-2,18,5,19,road);
+    route();
+    for (const x of [6,15,160,169]) {
+      for (const y of [8,20]) {
+        rect(x,y,6,5,ink); rect(x+1,y-2,4,5,"#83a482");
+      }
     }
-    mr(39, 15, 91, 20, "#a28971");
-    mr(37, 13, 95, 3, "#635f5c");
-    for (let j = 0; j < 12; j++)
-      for (let k = 0; k < 3; k++) mr(42 + j * 7, 18 + k * 5, 4, 3, "#b5cec4");
-    mr(77, 26, 12, 8, "#467469");
-    mr(0, 35, w, 12, "#c2b89a");
-    for (let j = 0; j < 14; j++) {
-      if (j > 3 && j < 10) continue;
-      mr(j * 13, 29, 12, 7, "#6d8d70");
-      mr(j * 13 + 2, 26, 8, 4, "#6d8d70");
+  } else if (scene.type === "floor") {
+    for (const [x,name] of floors[scene.floor]) {
+      const dx = u(x);
+      building(dx-6,10,13,13);
+      if (name === "계단") for (let k=0; k<3; k++) rect(dx-3,13+k*3,7,1,ink);
+      rect(dx-1,22,3,11,road);
     }
-    mr(0, 42, w, 2, "#9c967e");
+    route();
+    for (const o of objects()) if (o.type === "scholar") {
+      rect(u(o.x)-2,25,5,5,ink);
+      rect(u(o.x)-1,26,3,3,"#ffdb82");
+    }
   } else {
-    mr(0, 0, w, h, "#3e4959");
-    mr(0, 26, w, 4, "#b4a888");
-    const marks =
-      scene.type === "floor"
-        ? objects().filter((o) => o.type === "room")
-        : [{ x: 90 }, { x: 650 }];
-    for (let o of marks) {
-      let px = (o.x / worldWidth) * w;
-      mr(px - 4, 12, 9, 13, o.name === "계단" ? "#b5a780" : "#728791");
-      mr(px - 2, 15, 5, 10, "#485561");
-    }
-    for (let o of objects().filter((o) => o.type === "scholar"))
-      mr((o.x / worldWidth) * w - 1, 21, 3, 4, "#e8c477");
+    rect(6,6,w-12,h-12,ink);
+    rect(8,8,w-16,h-16,scene.type === "roof" ? "#a4b0ae" : paper);
+    for (const x of [22, 47, 128, 148]) building(x,11,12,7);
+    rect(u(90)-3,21,6,10,road);
+    routeY = 28;
+    route();
+    const boss = foes.find(e => e.boss);
+    if (boss) { rect(u(boss.x)-2,24,5,5,"#744758"); rect(u(boss.x)-1,25,3,3,"#ed9b9b"); }
   }
-  let px = clamp((player.x / worldWidth) * w, 4, w - 4),
-    py = scene.type === "gate" ? 36 : 27;
-  mr(px - 3, py - 3, 7, 6, "#424d4b");
-  mr(px - 2, py - 3, 5, 5, "#ffdf87");
-  mr(px, py - 5, 1, 8, "#fff1b4");
-  mr(px - 1, py + 3, 3, 1, "#535a52");
+  const px = u(player.x);
+  rect(px-3,routeY-5,7,6,"#193e3b"); rect(px-1,routeY+1,3,2,"#193e3b");
+  rect(px-2,routeY-4,5,4,"#ffce6a"); rect(px-1,routeY-4,2,1,"#fff2c4");
 }
 function render() {
   g.imageSmoothingEnabled = false;
   g.save();
-  if (shake > 0.5) g.translate(Math.round(Math.sin(clock * 93) * shake), 0);
+  if (!reducedMotion.matches && shake > 0.5) g.translate(Math.round(Math.sin(clock * 93) * shake), 0);
   if (scene.type === "gate") gate();
   else if (scene.type === "floor") hall();
   else battleBack();
@@ -597,6 +613,7 @@ let last = 0,
 function tick(ms) {
   const elapsed = last ? Math.min((ms - last) / 1000, 0.08) : 0;
   last = ms;
+  if (!modal && !document.hidden && !sceneryPaused && !reducedMotion.matches) sceneryTime += elapsed;
   acc += elapsed;
   while (acc >= 1 / 60) {
     step(1 / 60);

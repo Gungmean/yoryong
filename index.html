@@ -1,116 +1,78 @@
 <!doctype html>
 <html lang="ko">
   <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width,initial-scale=1,viewport-fit=cover"
-    />
-    <meta name="theme-color" content="#202431" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="theme-color" content="#142f32">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
-    <link rel="icon" href="assets/hero.png" />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="icon" href="assets/hero.png">
+    <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <main id="shell">
       <header class="mast">
         <div class="brand">
-          <i data-icon="crystal"></i>
-          <h1>요룡이의 <em>과학 모험</em></h1>
-          <span class="brand-en">BUGWANG QUEST</span>
+          <i data-icon="compass" aria-hidden="true"></i>
+          <div><h1>요룡이의 <em>과학 모험</em></h1><span class="brand-en" lang="en">BUGWANG QUEST</span></div>
         </div>
-        <nav>
-          <button id="sound" title="효과음 켜기" aria-label="효과음 켜기">
-            <i data-icon="sound"></i><span>사운드</span></button
-          ><button id="full">
-            <i data-icon="expand"></i><span>전체화면</span></button
-          ><button id="menu"><i data-icon="menu"></i><span>메뉴</span></button>
+        <nav aria-label="게임 설정">
+          <button id="sound" aria-label="효과음 켜기" data-tip="효과음 켜기"><i data-icon="mute"></i></button>
+          <button id="full" aria-label="전체화면" aria-pressed="false" data-tip="전체화면"><i data-icon="expand"></i></button>
+          <button id="menu"><i data-icon="menu"></i><span>메뉴</span><kbd>Esc</kbd></button>
         </nav>
       </header>
-      <section id="stage" aria-label="횡스크롤 게임 화면">
+      <section id="stage" aria-label="모험 필드">
         <canvas id="world" tabindex="0" aria-label="요룡이 모험 필드"></canvas>
-        <div class="player box">
-          <div class="face"><img src="assets/hero.png" alt="요룡이" /></div>
+        <div class="player">
+          <div class="face"><img src="assets/hero.png" alt=""></div>
           <div class="stats">
-            <div class="name">요룡이 <small id="level">Lv. 01</small></div>
-            <div class="statline">
-              <b>HP</b
-              ><span class="track hp"
-                ><i id="hpbar"></i><small id="hpval"></small
-              ></span>
-            </div>
-            <div class="statline">
-              <b>MP</b
-              ><span class="track mp"
-                ><i id="mpbar"></i><small id="mpval"></small
-              ></span>
-            </div>
+            <div class="name"><b>요룡이</b><small id="level"></small></div>
+            <div class="statline"><b>HP</b><span class="track hp"><i id="hpbar"></i></span><small id="hpval"></small></div>
+            <div class="statline"><b>MP</b><span class="track mp"><i id="mpbar"></i></span><small id="mpval"></small></div>
           </div>
         </div>
-        <button id="quest" class="quest box">
-          <span class="micro"><i data-icon="quest"></i> 현재 퀘스트</span
-          ><strong id="qtitle"></strong><span id="qdesc"></span>
+        <button id="quest" class="quest">
+          <span class="quest-tab"><i data-icon="quest"></i>현재 퀘스트</span>
+          <strong id="qtitle"></strong><span id="qdesc"></span>
         </button>
-        <button id="minimap" class="map box" title="캠퍼스 지도 열기 (M)">
-          <span class="map-top"
-            ><i data-icon="pin"></i><b id="maptitle">부광고등학교 정문</b
-            ><kbd>M</kbd></span
-          ><canvas width="168" height="47" id="mapview"></canvas>
+        <button id="minimap" class="map" data-tip="캠퍼스 지도 열기 (M)">
+          <span class="map-top"><i data-icon="pin"></i><b id="maptitle"></b><kbd>M</kbd></span>
+          <canvas width="176" height="48" id="mapview" aria-hidden="true"></canvas>
         </button>
-        <div id="zone" class="zone">
-          <span class="bead"></span><span id="zonetext"></span>
-        </div>
-        <div id="bossbar" hidden></div>
+        <div class="zone"><i data-icon="pin"></i><span id="zonetext"></span></div>
+        <div id="bossbar" hidden><i data-icon="rift"></i><span><b id="bossname"></b><span class="boss-track"><i id="bossfill"></i></span></span></div>
         <div id="toast" role="status"></div>
+        <div id="touch" aria-label="터치 조작">
+          <div><button data-key="ArrowLeft" aria-label="왼쪽 이동"><i data-icon="left"></i></button><button data-key="ArrowDown" aria-label="아래 방향 · 계단 내려가기"><i data-icon="interact"></i></button><button data-key="ArrowRight" aria-label="오른쪽 이동"><i data-icon="right"></i></button></div>
+          <div><button data-key="AltLeft">점프</button><button data-key="ShiftLeft">회피</button><button data-key="ArrowUp" aria-label="대화 또는 입장"><i data-icon="interact"></i></button></div>
+        </div>
       </section>
-      <section class="console">
+      <section class="console" aria-label="모험 장비">
         <div class="seals">
-          <div class="sectionhead">
-            <span class="diamond"></span>
-            <h2>과학의 인장</h2>
-            <small id="sealcount"></small>
-          </div>
+          <div class="sectionhead"><i data-icon="crest"></i><h2>과학의 인장</h2><small id="sealcount"></small></div>
           <div id="seallist"></div>
         </div>
         <div class="actions">
-          <div class="sectionhead">
-            <span class="diamond"></span>
-            <h2>액션 슬롯</h2>
-            <button class="edit" id="loadout">스킬 배치 <kbd>K</kbd></button>
-          </div>
+          <div class="sectionhead"><i data-icon="slots"></i><h2>액션 슬롯</h2><button class="edit" id="loadout">스킬 배치 <kbd>K</kbd></button></div>
           <div id="slots"></div>
         </div>
       </section>
       <footer>
+        <span class="touch-location"><i data-icon="pin"></i><span id="touchzone"></span></span>
         <div class="keys">
-          <span><kbd>←</kbd><kbd>→</kbd> 이동</span
-          ><span><kbd>Alt</kbd> 더블 점프</span
-          ><span><kbd>Shift</kbd> 회피</span><span><kbd>A</kbd> 공격</span
-          ><span><kbd>Q W E R</kbd> 스킬</span
-          ><span><kbd>↑</kbd> 상호작용</span>
+          <span><kbd>←</kbd><kbd>→</kbd> 이동</span><span><kbd>Alt</kbd> 더블 점프</span><span><kbd>Shift</kbd> 회피</span><span><kbd>A</kbd> 공격</span><span><kbd>Q W E R</kbd> 스킬</span><span><kbd>↑</kbd> 상호작용</span>
         </div>
-        <span class="save"><b></b><span id="savestatus">자동 저장</span></span>
+        <span class="save"><i data-icon="save"></i><span id="savestatus">자동 저장</span></span>
       </footer>
-      <div id="touch">
-        <button data-key="ArrowLeft">◀</button
-        ><button data-key="ArrowRight">▶</button
-        ><button data-key="AltLeft">점프</button
-        ><button data-key="ShiftLeft">회피</button
-        ><button data-key="ArrowUp">대화 / 입장</button>
-      </div>
       <div id="overlay" hidden>
-        <section
-          id="panel"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="paneltitle"
-        ></section>
+        <section id="panel" role="dialog" aria-modal="true" aria-labelledby="paneltitle"></section>
       </div>
     </main>
     <script src="data.js"></script>
     <script src="icons.js"></script>
     <script src="actor-sheets.js"></script>
     <script src="game.js"></script>
+    <script src="scenery.js"></script>
     <script src="render.js"></script>
   </body>
 </html>

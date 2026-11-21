@@ -49,6 +49,10 @@ let hp = 100,
   resumeFoe = null;
 const assets = {};
 let panelSince = 0;
+let returnFocus = null;
+const subjectIcons = ["atom", "flask", "leaf", "earth"];
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let sceneryPaused = false;
 for (const id of Object.keys(actorSheets)) {
   const sheet = new Image();
   sheet.src = "assets/actors/" + id + ".png";
@@ -125,6 +129,7 @@ function save() {
         hp,
         mp,
         sound,
+        sceneryPaused,
         encounter,
       }),
     );
@@ -181,6 +186,7 @@ function load() {
     hp = clamp(Number(d.hp) || 100, 1, 100);
     mp = clamp(Number(d.mp) || 0, 0, 60);
     sound = !!d.sound;
+    sceneryPaused = d.sceneryPaused === true;
     resumeFoe = d.encounter;
   } catch {}
 }
@@ -229,7 +235,9 @@ function refresh() {
   $("qtitle").textContent = q[0];
   $("qdesc").textContent = q[1];
   $("maptitle").textContent = floorName();
+  $("minimap").ariaLabel = floorName() + " · 캠퍼스 지도 열기";
   $("zonetext").textContent = "인천 부평  /  " + floorName();
+  $("touchzone").textContent = $("zonetext").textContent;
   $("level").textContent =
     "Lv. " +
     String(1 + progress.learned.length + progress.cleared.length).padStart(
@@ -237,7 +245,6 @@ function refresh() {
       "0",
     );
   $("sealcount").textContent = progress.cleared.length + " / 4";
-  const symbolic = ["atom", "flask", "leaf", "earth"];
   $("seallist").innerHTML = subjects
     .slice(0, 4)
     .map(
@@ -246,10 +253,11 @@ function refresh() {
         (progress.cleared.includes(i) ? "done" : "") +
         '" data-seal="' +
         i +
-        '" title="' +
+        '" aria-label="' + s.name + " · " + s.seal + " · " +
+        (progress.cleared.includes(i) ? "획득" : "미획득") + '" data-tip="' +
         s.seal +
-        '"><i data-icon="' +
-        symbolic[i] +
+        ' · ' + (progress.cleared.includes(i) ? "획득" : "미획득") + '"><i data-icon="' +
+        (progress.cleared.includes(i) ? "earned-" : "seal-") + subjectIcons[i] +
         '"></i>' +
         s.name +
         "</button>",
@@ -261,7 +269,7 @@ function refresh() {
     let src = basic
       ? icon("sword")
       : empty
-        ? icon(symbolic[slotKeys.indexOf(key)])
+        ? icon("lock")
         : "assets/skill" + id + ".png";
     return (
       '<button class="slot ' +
@@ -276,9 +284,9 @@ function refresh() {
       (empty ? "empty" : "") +
       '" src="' +
       src +
-      '" alt=""><span class="slot-text"><strong>' +
+      '" alt=""><span class="slot-text"><kbd>' +
       key +
-      "</strong><small>" +
+      "</kbd><small>" +
       (basic ? "기본 공격" : empty ? "미장착" : scholars[id][2]) +
       '</small></span><span class="timer"></span></button>'
     );
@@ -301,11 +309,8 @@ function statusBars() {
   const b = foes.find((e) => e.boss);
   $("bossbar").hidden = !b;
   if (b) {
-    $("bossbar").innerHTML =
-      subjects[b.kind].boss +
-      '<i style="width:' +
-      (100 * b.hp) / b.max +
-      '%"></i>';
+    $("bossname").textContent = subjects[b.kind].boss;
+    $("bossfill").style.width = (100 * b.hp) / b.max + "%";
   }
   document.querySelectorAll(".slot .timer").forEach((el, i) => {
     let cd = i ? cool[progress.slots[i - 1]] : 0;
@@ -315,10 +320,15 @@ function statusBars() {
 function soundLabel() {
   const el = $("sound");
   el.querySelector("i").dataset.icon = sound ? "sound" : "mute";
-  el.title = el.ariaLabel = sound ? "효과음 끄기" : "효과음 켜기";
+  el.dataset.tip = el.ariaLabel = sound ? "효과음 끄기" : "효과음 켜기";
+  el.setAttribute("aria-pressed", String(sound));
   decorate(el);
 }
 function show(kind, title, body, canClose = true) {
+  if (!modal) {
+    returnFocus = document.activeElement?.closest("#shell button") || $("world");
+    for (const child of $("shell").children) child.inert = child !== $("overlay");
+  }
   modal = kind;
   panelSince = performance.now();
   $("overlay").dataset.kind = kind;
@@ -326,24 +336,26 @@ function show(kind, title, body, canClose = true) {
   player.vx = 0;
   player.buffer = 0;
   $("overlay").hidden = false;
-  $("panel").innerHTML =
-    '<div class="panel-head"><h2 id="paneltitle">' +
-    title +
-    "</h2>" +
-    (canClose
-      ? '<button class="close" aria-label="닫기" data-close>×</button>'
-      : "") +
-    "</div>" +
-    body;
+  const marks = { menu: "compass", map: "map", equip: "slots", quest: "quest",
+    stairs: "stairs", lab: "flask", down: "leaf", ending: "crest", seal: "crest",
+    dialogue: "quest", quiz: "atom", help: "map", reset: "compass" };
+  $("panel").innerHTML = `<div class="panel-head"><i data-icon="${marks[kind]}"></i>
+    <h2 id="paneltitle">${title}</h2>
+    ${canClose ? '<button class="close" aria-label="닫기" data-close><i data-icon="close"></i></button>' : ''}
+    </div><div class="panel-body">${body}</div>`;
+  decorate($("panel"));
   $("panel")
     .querySelector("[data-close]")
     ?.addEventListener("click", closePanel);
-  $("panel").querySelector("button,select")?.focus({ preventScroll: true });
+  $("panel").scrollTop = 0;
+  ($("panel").querySelector(".panel-body button:not(:disabled)") || $("panel").querySelector("button"))?.focus({ preventScroll: true });
 }
 function closePanel() {
   modal = "";
   $("overlay").hidden = true;
-  $("world").focus({ preventScroll: true });
+  for (const child of $("shell").children) child.inert = false;
+  (returnFocus?.isConnected ? returnFocus : $("world")).focus({ preventScroll: true });
+  returnFocus = null;
   keys.clear();
 }
 function dialogue(name, asset, line, button, fn) {
@@ -356,7 +368,7 @@ function dialogue(name, asset, line, button, fn) {
       line +
       '</p><button class="confirm" id="continue">' +
       button +
-      "　›</button></div></div>",
+      "</button></div></div>",
     false,
   );
   $("continue").onclick = () => {
@@ -397,10 +409,10 @@ function showMap() {
                 ? "도서관 · 매점 · 과학실"
                 : "모험의 출발점";
         return (
-          '<div class="floorrow"><b>' +
+          '<div class="floorrow map-floor' + (scene.floor === f ? " current" : "") + '"><b>' +
           s +
           "</b><span>" +
-          (scene.floor === f ? "◆ 현 위치　" : "") +
+          (scene.floor === f ? '<em class="here">현 위치</em> ' : "") +
           status +
           "</span></div>"
         );
@@ -414,16 +426,16 @@ function showQuest() {
   show(
     "quest",
     "모험 일지",
-    '<div class="tag">CURRENT QUEST</div><p><b>' +
+    '<div class="journal-note"><strong>' +
       q[0] +
-      "</b><br>" +
+      "</strong><p>" +
       q[1] +
-      "</p>" +
+      "</p></div>" +
       subjects
         .slice(0, 4)
         .map(
           (s, i) =>
-            '<div class="floorrow"><b>' +
+            '<div class="floorrow"><b><i data-icon="' + subjectIcons[i] + '"></i>' +
             s.name +
             " · " +
             s.boss +
@@ -438,82 +450,82 @@ function showQuest() {
         .join(""),
   );
 }
-function showEquip() {
-  show(
-    "equip",
-    "스킬 배치",
-    '<p class="small">학자의 시련을 통과하면 스킬을 배웁니다. 같은 스킬의 슬롯을 바꾸면 두 자리가 교환됩니다.</p>' +
-      slotKeys
-        .map(
-          (k, i) =>
-            '<label class="equip-line"><b>' +
-            k +
-            '</b><img src="' +
-            (progress.slots[i] == null
-              ? icon("lock")
-              : "assets/skill" + progress.slots[i] + ".png") +
-            '" alt=""><select data-equip="' +
-            i +
-            '"><option value="">미장착</option>' +
-            progress.learned
-              .map(
-                (id) =>
-                  '<option value="' +
-                  id +
-                  '" ' +
-                  (progress.slots[i] === id ? "selected" : "") +
-                  ">" +
-                  scholars[id][1] +
-                  "</option>",
-              )
-              .join("") +
-            "</select></label>",
-        )
-        .join("") +
-      progress.learned
-        .map(
-          (id) =>
-            '<div class="floorrow"><b>' +
-            scholars[id][1] +
-            "</b><span>" +
-            scholars[id][9] +
-            " 피해 · " +
-            scholars[id][10] +
-            "초</span></div>",
-        )
-        .join(""),
-  );
-  document.querySelectorAll("[data-equip]").forEach(
-    (el) =>
-      (el.onchange = () => {
-        const i = Number(el.dataset.equip),
-          id = el.value === "" ? null : Number(el.value),
-          old = progress.slots.indexOf(id);
-        if (id != null && old >= 0 && old !== i)
-          progress.slots[old] = progress.slots[i];
-        progress.slots[i] = id;
-        save();
-        refresh();
-        showEquip();
-      }),
-  );
+function showEquip(activeSlot = 0) {
+  const equipped = progress.slots[activeSlot];
+  const imageFor = (id) => id == null ? icon("lock") : "assets/skill" + id + ".png";
+  const sockets = slotKeys.map((key, i) => {
+    const id = progress.slots[i];
+    return `<button class="socket" data-equip="${i}" aria-pressed="${i === activeSlot}">
+      <kbd>${key}</kbd><img src="${imageFor(id)}" alt="">
+      <span>${id == null ? "미장착" : scholars[id][2]}</span></button>`;
+  }).join("");
+  const options = progress.learned.map((id) => {
+    const s = scholars[id], index = progress.slots.indexOf(id);
+    const state = index < 0 ? "장착" : index === activeSlot ? "장착 중" : slotKeys[index] + "에서 교환";
+    return `<button class="skill-choice" data-skill="${id}" aria-pressed="${id === equipped}">
+      <img src="${imageFor(id)}" alt=""><span><b>${s[1]}</b><small>피해 ${s[9]} · 재사용 ${s[10]}초</small></span><em>${state}</em></button>`;
+  }).join("");
+  show("equip", "스킬 배치",
+    `<div class="sockets" role="group" aria-label="배치할 슬롯">${sockets}</div>
+    <h3 class="choice-title"><kbd>${slotKeys[activeSlot]}</kbd> 슬롯에 배치할 스킬</h3>
+    ${options || '<p class="empty-note">아직 배운 스킬이 없어요. 위층의 학자를 만나 시련에 도전하세요.</p>'}
+    ${equipped != null ? '<button class="rowbtn" data-unequip>이 슬롯 비우기</button>' : ''}`);
+  $("panel").querySelector(`[data-equip="${activeSlot}"]`).focus({ preventScroll: true });
+  $("panel").querySelectorAll("[data-equip]").forEach(button => {
+    button.onclick = () => showEquip(Number(button.dataset.equip));
+  });
+  function assign(id) {
+    const old = progress.slots.indexOf(id);
+    if (id != null && old >= 0) progress.slots[old] = equipped;
+    progress.slots[activeSlot] = id;
+    save();
+    refresh();
+    showEquip(activeSlot);
+  }
+  $("panel").querySelectorAll("[data-skill]").forEach(button => {
+    button.onclick = () => assign(Number(button.dataset.skill));
+  });
+  const remove = $("panel").querySelector("[data-unequip]");
+  if (remove) remove.onclick = () => assign(null);
 }
+function syncMotionSwitch() {
+  const button = $("motion");
+  if (!button) return;
+  const enabled = !sceneryPaused && !reducedMotion.matches;
+  button.disabled = reducedMotion.matches;
+  button.setAttribute("aria-pressed", String(enabled));
+  button.lastElementChild.textContent = reducedMotion.matches ? "기기 설정 · 줄임" : enabled ? "켜짐" : "꺼짐";
+}
+reducedMotion.addEventListener("change", syncMotionSwitch);
 function menu() {
-  show(
-    "menu",
-    "모험 메뉴",
-    '<button class="confirm" id="resume">모험 계속하기</button><div class="grid"><button class="rowbtn" id="tomap">캠퍼스 지도　M</button><button class="rowbtn" id="toequip">스킬 배치　K</button><button class="rowbtn" id="toquest">모험 일지</button><button class="rowbtn" id="help">조작 안내</button></div><button class="rowbtn" id="reset">처음부터 다시 시작</button>',
-  );
+  show("menu", "모험 메뉴",
+    `<button class="confirm" id="resume">모험 계속하기</button>
+    <div class="menu-links">
+      <button class="rowbtn" id="tomap"><i data-icon="map"></i>캠퍼스 지도<kbd>M</kbd></button>
+      <button class="rowbtn" id="toequip"><i data-icon="slots"></i>스킬 배치<kbd>K</kbd></button>
+      <button class="rowbtn" id="toquest"><i data-icon="quest"></i>모험 일지</button>
+      <button class="rowbtn" id="help"><i data-icon="compass"></i>조작 안내</button>
+    </div>
+    <button class="rowbtn" id="motion"><span>배경 움직임</span><b class="switch-state"></b></button>
+    <button class="text-action" id="reset">처음부터 다시 시작</button>`);
   $("resume").onclick = closePanel;
   $("tomap").onclick = showMap;
-  $("toequip").onclick = showEquip;
+  $("toequip").onclick = () => showEquip();
   $("toquest").onclick = showQuest;
+  syncMotionSwitch();
+  $("motion").onclick = () => {
+    sceneryPaused = !sceneryPaused;
+    syncMotionSwitch();
+    save();
+  };
   $("help").onclick = () =>
-    show(
-      "help",
-      "조작 안내",
-      "<p>← → 이동　·　Alt 점프 (공중에서 한 번 더)<br>Shift 회피 대시　·　A 기본 공격<br>Q W E R 장착한 스킬　·　K 스킬 배치<br>↑ 대화·입장·계단　·　↓ 계단 한 층 내려가기<br>M 캠퍼스 지도　·　Esc 메뉴 / 닫기</p>",
-    );
+    show("help", "조작 안내", [
+      ["← →", "좌우 이동"], ["Alt", "점프 · 공중에서 더블 점프"],
+      ["↓ + Alt", "발판 내려오기"], ["Shift", "회피 대시"],
+      ["A", "기본 공격"], ["Q W E R", "장착한 스킬 사용"], ["K", "스킬 배치"],
+      ["↑", "대화 · 입장 · 계단"], ["↓", "계단에서 한 층 내려가기"],
+      ["1–6", "답 또는 층 선택"], ["M", "캠퍼스 지도"], ["Esc", "메뉴 · 닫기"]
+    ].map(([key, action]) => `<div class="help-row"><kbd>${key}</kbd><span>${action}</span></div>`).join(""));
   $("reset").onclick = () => {
     show(
       "reset",
@@ -611,9 +623,9 @@ function quiz(id) {
             (t, n) =>
               '<button class="opt" data-answer="' +
               n +
-              '">' +
+              '"><kbd>' +
               (n + 1) +
-              ". " +
+              "</kbd>" +
               t +
               "</button>",
           )
@@ -897,7 +909,8 @@ function winBoss(i) {
         show(
           "ending",
           "부광의 아침을 되찾았다!",
-          '<p>요룡이의 과학 모험을 완주했습니다.</p><div class="floorrow"><b>과학의 인장</b><span>4 / 4</span></div><div class="floorrow"><b>학자의 시련</b><span>8 / 8</span></div><button class="confirm" id="afterend">학교로 돌아가기</button>',
+          '<div class="award-seals">' + subjectIcons.map(name => '<i data-icon="earned-' + name + '"></i>').join("") +
+          '</div><p>요룡이의 과학 모험을 완주했습니다.</p><div class="floorrow"><b>과학의 인장</b><span>4 / 4</span></div><div class="floorrow"><b>학자의 시련</b><span>8 / 8</span></div><button class="confirm" id="afterend">학교로 돌아가기</button>',
           false,
         );
         $("afterend").onclick = () => {
@@ -956,7 +969,7 @@ function hurt(n) {
     show(
       "down",
       "잠시 숨을 고르자",
-      '<p>요룡이가 지쳤다. 익힌 스킬과 모은 인장을 간직한 채 다시 도전할 수 있다.</p><button class="confirm" id="retry">체력 회복 후 다시 도전</button>',
+      '<div class="conversation"><img class="portrait" src="assets/hero.png" alt=""><p>요룡이가 지쳤다. 익힌 스킬과 모은 인장을 간직한 채 다시 도전할 수 있다.</p></div><button class="confirm" id="retry">체력 회복 후 다시 도전</button>',
       false,
     );
     $("retry").onclick = () => {
@@ -1367,6 +1380,15 @@ const gameKeys = new Set([
   "Enter",
 ]);
 window.addEventListener("keydown", (e) => {
+  if (modal && e.key === "Tab") {
+    const buttons = $("panel").querySelectorAll("button:not(:disabled)");
+    const first = buttons[0], last = buttons[buttons.length - 1];
+    if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+      e.preventDefault();
+      (e.shiftKey ? last : first)?.focus();
+    }
+    return;
+  }
   const digit = /^(?:Digit|Numpad)([1-6])$/.exec(e.code);
   if (digit && (modal === "quiz" || modal === "stairs")) {
     if (!e.repeat) {
@@ -1387,7 +1409,7 @@ window.addEventListener("keydown", (e) => {
     !(e.code === "Enter" && modal === "dialogue")
   )
     return;
-  if (!modal && e.code === "Enter" && e.target.closest?.("button,select"))
+  if (!modal && ["Enter", "Space"].includes(e.code) && e.target.closest?.("button"))
     return;
   e.preventDefault();
   press(e.code, e.repeat);
@@ -1409,14 +1431,19 @@ document.querySelectorAll("[data-key]").forEach((b) => {
   b.onpointerdown = (e) => {
     e.preventDefault();
     b.setPointerCapture(e.pointerId);
+    b.classList.add("held");
     press(b.dataset.key);
   };
-  b.onpointerup = b.onpointercancel = () => keys.delete(b.dataset.key);
+  b.onpointerup = b.onpointercancel = b.onlostpointercapture = () => {
+    keys.delete(b.dataset.key);
+    b.classList.remove("held");
+  };
+  b.onclick = (event) => { if (event.detail === 0) { press(b.dataset.key); keys.delete(b.dataset.key); } };
 });
 $("menu").onclick = menu;
 $("minimap").onclick = showMap;
 $("quest").onclick = showQuest;
-$("loadout").onclick = showEquip;
+$("loadout").onclick = () => showEquip();
 $("sound").onclick = () => {
   sound = !sound;
   soundLabel();
@@ -1431,12 +1458,17 @@ $("full").onclick = async () => {
     notify("브라우저의 전체화면 단축키 F11을 이용하세요.");
   }
 };
+document.addEventListener("fullscreenchange", () => {
+  const active = !!document.fullscreenElement;
+  $("full").dataset.tip = $("full").ariaLabel = active ? "전체화면 종료" : "전체화면";
+  $("full").setAttribute("aria-pressed", String(active));
+});
 $("slots").onclick = (e) => {
   let b = e.target.closest("[data-slot]");
   if (!b) return;
   let k = b.dataset.slot;
   if (k === "A") attack();
-  else if (progress.slots[slotKeys.indexOf(k)] == null) showEquip();
+  else if (progress.slots[slotKeys.indexOf(k)] == null) showEquip(slotKeys.indexOf(k));
   else cast(slotKeys.indexOf(k));
 };
 $("seallist").onclick = (e) => {
@@ -1447,7 +1479,7 @@ $("seallist").onclick = (e) => {
   show(
     "seal",
     s.seal,
-    "<p>" +
+    '<div class="seal-detail"><i data-icon="' + (progress.cleared.includes(i) ? "earned-" : "seal-") + subjectIcons[i] + '"></i><p>' +
       s.floor +
       "층에서 " +
       scholars[2 * i][0] +
@@ -1459,7 +1491,7 @@ $("seallist").onclick = (e) => {
       s.lab +
       "에 들어가 " +
       s.boss +
-      '을 물리치면 얻습니다.</p><div class="floorrow"><b>수집 상태</b><span>' +
+      '을 물리치면 얻습니다.</p></div><div class="floorrow"><b>수집 상태</b><span>' +
       (progress.cleared.includes(i) ? "획득" : "미획득") +
       "</span></div>",
   );

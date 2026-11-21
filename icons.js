@@ -1,5 +1,6 @@
 "use strict";
 const iconCache = {};
+const iconTiles = {};
 function icon(name) {
   if (iconCache[name]) return iconCache[name];
   const c = document.createElement("canvas");
@@ -54,6 +55,69 @@ function icon(name) {
   };
   const gold = "#edc677",
     white = "#f9efce";
+  const mint = "#8ddbc0", deep = "#23544e", brass = "#ae7742";
+  if (name === "compass" || name === "crest") {
+    poly([[6,1],[17,1],[22,6],[22,16],[17,21],[12,23],[6,21],[1,16],[1,6]], brass);
+    poly([[6,1],[17,1],[22,6],[22,15],[17,20],[12,22],[6,20],[1,15],[1,6]], gold);
+    poly([[7,3],[16,3],[20,7],[20,14],[16,18],[12,20],[7,18],[3,14],[3,7]], deep);
+    // A compass rose cut into the brass school badge.
+    poly([[12,2],[14,9],[21,11],[14,13],[12,20],[10,13],[3,11],[10,9]], mint);
+    poly([[12,2],[12,11],[10,9]], white);
+    poly([[12,11],[21,11],[14,13]], gold);
+    poly([[12,11],[12,20],[10,13]], gold);
+    rect(11,10,3,3,white);
+  }
+  if (name.startsWith("seal-") || name.startsWith("earned-")) {
+    const [state, subject] = name.split("-");
+    const earned = state === "earned";
+    const rim = earned ? "#f8d985" : "#799f94";
+    poly([[6,1],[17,1],[22,6],[22,17],[17,22],[6,22],[1,17],[1,6]], earned ? brass : "#2c5350");
+    poly([[6,1],[17,1],[22,6],[22,15],[17,20],[6,20],[1,15],[1,6]], rim);
+    poly([[7,3],[16,3],[20,7],[20,14],[16,18],[7,18],[3,14],[3,7]], earned ? "#574a37" : "#294a48");
+    icon(subject);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(iconTiles[subject], 4, 3, 16, 16);
+    rect(7,1,9,1,earned ? white : "#b0c3a6");
+    dot(18,17,earned ? white : "#a9ba9c");
+  }
+  if (name === "slots") {
+    for (const x of [1, 9, 17]) {
+      rect(x,6,6,12,mint);
+      rect(x+1,8,4,7,deep);
+    }
+  }
+  if (name === "map") {
+    poly([[2,5],[8,3],[15,6],[22,3],[22,18],[15,21],[8,18],[2,21]], gold);
+    line(8,5,8,16,brass);
+    line(15,8,15,19,brass);
+    line(4,14,10,10,deep);
+    line(10,10,16,13,deep);
+    dot(17,9,deep,3);
+  }
+  if (name === "stairs") {
+    for (let i = 0; i < 4; i++) rect(3+i*5,16-i*4,5,5+i*4,i%2 ? gold : white);
+  }
+  if (name === "rift") {
+    poly([[13,1],[7,10],[10,12],[5,22],[17,13],[14,11],[20,3]], "#d3a7ed");
+    line(12,6,9,10,white);
+  }
+  if (name === "close") {
+    line(6,6,16,16,white,2);
+    line(16,6,6,16,white,2);
+  }
+  if (name === "left" || name === "right" || name === "interact") {
+    const points = name === "left" ? [[4,11],[15,3],[15,8],[20,8],[20,15],[15,15],[15,20]]
+      : name === "right" ? [[20,11],[9,3],[9,8],[4,8],[4,15],[9,15],[9,20]]
+      : [[12,3],[21,13],[15,13],[15,20],[9,20],[9,13],[3,13]];
+    poly(points,white);
+  }
+  if (name === "save") {
+    rect(3,4,17,16,mint);
+    rect(6,4,10,6,deep);
+    rect(12,5,2,4,mint);
+    rect(6,13,11,7,deep);
+    rect(8,15,7,1,mint);
+  }
   if (name === "crystal") {
     poly(
       [
@@ -270,6 +334,7 @@ function icon(name) {
     rect(4, 11, 16, 10, "#b1ad9d");
     rect(11, 14, 3, 4, "#414652");
   }
+  iconTiles[name] = c;
   const url = c.toDataURL();
   iconCache[name] = url;
   return url;

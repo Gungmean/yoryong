@@ -605,7 +605,7 @@ function render() {
   character();
   particles();
   g.restore();
-  miniMap();
+  if (!$("mapview").hidden) miniMap();
 }
 let last = 0,
   acc = 0,

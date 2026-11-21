@@ -13,6 +13,7 @@ const campusWorld = (() => {
     camera,
     stage,
     texture,
+    classroomTexture,
     paper,
     unavailable = false,
     lost = false;
@@ -159,6 +160,7 @@ const campusWorld = (() => {
       lost = false;
       lastKey = "";
       texture.needsUpdate = true;
+      if (classroomTexture) classroomTexture.needsUpdate = true;
     });
   }
 
@@ -746,6 +748,45 @@ const campusWorld = (() => {
     });
     particles3D("dust", 23, worldWidth);
   }
+  function classroom() {
+    const art = assets.classrooms;
+    if (!classroomTexture) {
+      classroomTexture = new T.Texture(art);
+      classroomTexture.colorSpace = T.SRGBColorSpace;
+      classroomTexture.magFilter = classroomTexture.minFilter = T.NearestFilter;
+      classroomTexture.generateMipmaps = false;
+      classroomTexture.needsUpdate = true;
+    }
+    for (const p of classroomPanels()) {
+      const plane = new T.PlaneGeometry(p.w, p.h / cos);
+      const uv = plane.getAttribute("uv");
+      for (let i = 0; i < uv.count; i++) {
+        const u = (p.sx + .5 + uv.getX(i) * (p.sw - 1)) / art.width;
+        const v = 1 - (p.sy + .5 + (1 - uv.getY(i)) * (p.sh - 1)) / art.height;
+        uv.setXY(i, u, v);
+      }
+      const mat = new T.MeshBasicMaterial({map: classroomTexture, transparent: p.z === 0, toneMapped: false});
+      const planeMesh = new T.Mesh(plane, mat);
+      planeMesh.position.set(p.x + p.w / 2, worldY(p.y + p.h / 2, p.z), p.z);
+      stage.add(planeMesh);
+    }
+
+    // A student-made mobile hangs in the window. Its pieces swing from fixed strings.
+    const mobile = group(268 + 5 * scene.room, 49, -160);
+    part(mobile, "box", "#997a54", 0, -6, 0, 1, 12, 1);
+    const bar = new T.Group(); bar.position.y = -12; mobile.add(bar);
+    part(bar, "box", "#ac8963", 0, 0, 0, 30, 1.4, 1.4);
+    const colors = ["#edb667", "#88b67b", "#9aa9cc"];
+    for (let i = 0; i < 3; i++) {
+      const x = (i - 1) * 13, length = [14, 23, 17][(i + scene.room) % 3];
+      part(bar, "box", "#bda887", x, -length / 2, 0, .8, length, .8);
+      const charm = part(bar, scene.floor === 5 ? "orb" : "gem", colors[(i + scene.floor) % 3],
+        x, -length, 0, 4.4, scene.floor === 4 ? 6.5 : 4.4, 2.7);
+      moving.push(t => { charm.rotation.y = t * .7 + i; });
+    }
+    moving.push(t => { bar.rotation.z = Math.sin(t * .85 + scene.room) * .075; });
+    particles3D("dust", 22, worldWidth);
+  }
   function laboratory() {
     const name = ["physics", "chem", "bio", "earth"][scene.subject];
     panoramic(name, 0.51, -12, 343, -270, 6);
@@ -841,9 +882,10 @@ const campusWorld = (() => {
     stage.add(sun);
     if (scene.type === "gate") campus();
     else if (scene.type === "floor") hallway();
+    else if (scene.type === "classroom") classroom();
     else if (scene.type === "arena") laboratory();
     else rooftop();
-    for (const b of platforms()) bench(b, scene.type === "floor");
+    if (scene.type !== "classroom") for (const b of platforms()) bench(b, scene.type === "floor");
     if (canvas.width !== W || canvas.height !== H) renderer.setSize(W, H, false);
     camera.left = -W / 2;
     camera.right = W / 2;
@@ -851,10 +893,15 @@ const campusWorld = (() => {
   }
   function draw(shakeX) {
     if (unavailable || lost || !image.complete || !image.naturalWidth) return false;
+    if (scene.type === "classroom" && !assets.classrooms.naturalWidth) {
+      canvas.hidden = true;
+      lastKey = "";
+      return false;
+    }
     try {
       if (!renderer) initialize();
       if (!renderer) return false;
-      const key = [scene.type, scene.floor, scene.subject, scene.type === "roof" && progress.won, W].join(
+      const key = [scene.type, scene.floor, scene.room, scene.subject, scene.type === "roof" && progress.won, W].join(
         "/",
       );
       if (key !== lastKey) {

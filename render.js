@@ -196,7 +196,7 @@ function resize() {
   inkScaleX = lettering.width / W;
   inkScaleY = lettering.height / H;
   g.imageSmoothingEnabled = false;
-  cam = clamp(player.x - W * 0.42, 0, Math.max(0, worldWidth - W));
+  cam = cameraTarget();
 }
 new ResizeObserver(resize).observe(cv);
 resize();
@@ -420,6 +420,34 @@ function hall(depth) {
     label(o.name, sx, GROUND + 4, "#ffdfa5", "#32313c", 8);
   }
 }
+function classroomInterior(depth) {
+  if (!depth) {
+    r(0, 0, W, H, "#28283f");
+    const art = assets.classrooms;
+    if (art.naturalWidth) for (const p of classroomPanels())
+      g.drawImage(art, p.sx, p.sy, p.sw, p.sh, Math.round(p.x - cam), p.y, p.w, p.h);
+    for (let i = 0; i < 16; i++) {
+      const x = (i*141 + sceneryTime*3) % worldWidth - cam;
+      const y = 145 + Math.sin(sceneryTime*.55+i)*13 + (i*23)%95;
+      r(x,y,2,1,"#fbe7af");
+    }
+  }
+  const sill = scene.floor === 5 ? 251 : 254;
+  for (const door of sideStairs.classroom) {
+    const x = door.x - cam;
+    if (x < -45 || x > W+45) continue;
+    // Small wood-and-stone steps belong to the door threshold, behind the walking aisle.
+    r(x-32,sill+2,64,4,"#84775f");
+    r(x-32,sill+2,64,1,"#c4af8a");
+    r(x-29,sill-1,58,4,"#8e795c");
+    r(x-29,sill-1,58,1,"#d5b78b");
+    label(door.name,x,48,"#f5e8c4","#41534b",8);
+  }
+  const boardX = classroomBoard.x - cam;
+  if (boardX > -90 && boardX < W+90)
+    word(floorName(),boardX,132,13,"#ebead9");
+}
+
 function battleBack() {
   const roof = scene.type === "roof";
   backdrop(roof ? "roof" : "lab", clamp(W, 680, 960), H, cam * .32, (w) => {
@@ -506,15 +534,17 @@ function character() {
   if (!near || near.type === "scholar")
     label("요룡이", x, p.y + 5, "#fff4db", "#2c303b", 8);
   if (near) {
-    const t =
-      near.type === "scholar"
-        ? "↑ 대화"
-        : near.type === "stair"
-          ? (scene.type==="floor"?"↑ "+near.name:scene.type==="roof"?"↑ 5층으로":scene.type==="gate"?"↑ 본관 1층으로":"↑ 복도로")
-          : near.name === "매점"
-            ? "↑ 회복"
-            : "↑ " + near.name;
-    label(t, x, p.y - 79, "#ffdda0", "#282e3a", 9);
+    let action = near.name;
+    if (near.type === "scholar") action = "대화";
+    else if (near.room) action += " 입장";
+    else if (near.name === "매점") action = "회복";
+    else if (near.type === "stair") {
+      if (scene.type === "classroom") action += " · 복도로";
+      else if (scene.type === "roof") action = "5층으로";
+      else if (scene.type === "gate") action = "본관 1층으로";
+      else if (scene.type === "arena") action = "복도로";
+    }
+    label("↑ " + action, x, p.y - 79, "#ffdda0", "#282e3a", 9);
   }
 }
 function monsters() {
@@ -629,6 +659,15 @@ function miniMap() {
       rect(u(o.x)-2,25,5,5,ink);
       rect(u(o.x)-1,26,3,3,"#ffdb82");
     }
+  } else if (scene.type === "classroom") {
+    rect(5,5,w-10,h-11,ink);
+    rect(7,7,w-14,h-15,paper);
+    rect(u(classroomBoard.x)-15,8,30,4,"#406448");
+    for (let x=30; x<w-20; x+=19) {
+      rect(x,17,10,5,"#a68257");
+      rect(x+3,23,5,2,"#87948b");
+    }
+    route();
   } else {
     rect(6,6,w-12,h-12,ink);
     rect(8,8,w-16,h-16,scene.type === "roof" ? "#a4b0ae" : paper);
@@ -662,7 +701,9 @@ function revealArrival() {
   if (sceneTransition.arrived === null) {
     sceneTransition.arrived = now;
     let place = floorName(), detail;
-    if (scene.type === "floor") {
+    if (scene.type === "classroom") {
+      detail = "본관 " + scene.floor + "층 · 교실";
+    } else if (scene.type === "floor") {
       detail = scene.floor === 1 ? "중앙 현관 · 과학실" : subjects[scene.floor - 2].name + "의 시련";
     } else if (scene.type === "arena") {
       detail = "1층 · " + subjects[scene.subject].lab;
@@ -699,8 +740,9 @@ function render() {
   }
   if (scene.type === "gate") gate(depth);
   else if (scene.type === "floor") hall(depth);
+  else if (scene.type === "classroom") classroomInterior(depth);
   else if (!depth) battleBack();
-  if (!depth) {
+  if (!depth && scene.type !== "classroom") {
     if (scene.type !== "floor") endStairArt();
     drawPlatforms();
   }

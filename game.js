@@ -47,29 +47,40 @@ let hp = 100,
   shake = 0,
   near = null,
   resumeFoe = null;
-const mapWidths = { gate: 1140, floor: 2290, arena: 1040, roof: 1040 };
+const mapWidths = { gate: 1140, floor: 2290, arena: 1040, roof: 1040, classroom: 1080 };
 const sideStairs = Object.fromEntries(
-  Object.entries(mapWidths).map(([type, width]) => [
-    type,
-    [
-      { x: 64, name: "서쪽 계단", side: "west", type: "stair" },
-      { x: width - 64, name: "동쪽 계단", side: "east", type: "stair" },
-    ],
-  ]),
+  Object.entries(mapWidths).map(([type, width]) => {
+    const inside = type === "classroom", inset = inside ? 52 : 64;
+    return [type, [
+      { x: inset, name: inside ? "앞문" : "서쪽 계단", side: "west", type: "stair" },
+      { x: width - inset, name: inside ? "뒷문" : "동쪽 계단", side: "east", type: "stair" },
+    ]];
+  }),
 );
 const hallBays = floors.map((layout) => [
   sideStairs.floor[0],
-  ...layout.map(([x, name]) =>
+  ...layout.map(([x, name, room]) =>
     name === "계단"
       ? { x, name: "중앙 계단", side: "center", type: "stair" }
-      : { x, name, type: "room" },
+      : { x, name, room, type: "room" },
   ),
   sideStairs.floor[1],
 ]);
+function classroomDoor(floor, room) {
+  if (!Number.isInteger(floor) || !Number.isInteger(room)) return;
+  return hallBays[floor]?.find(bay => bay.room === room);
+}
+const classroomBoard = { x: mapWidths.classroom / 2, name: "칠판 읽기", type: "board" };
 function stairX(type, side) {
   return sideStairs[type].find((stair) => stair.side === side)?.x ?? STAIR;
 }
+function cameraTarget() {
+  if (scene.type === "classroom" && W > worldWidth) return (worldWidth - W) / 2;
+  return clamp(player.x - W * .42, 0, Math.max(0, worldWidth - W));
+}
 const assets = {};
+assets.classrooms = new Image();
+assets.classrooms.src = classroomAtlasURL;
 assets.combat = new Image();
 assets.combat.src = "assets/combat/effects.webp";
 for (const theme of ["hall", "gate", "arena", "roof"]) {
@@ -105,14 +116,13 @@ for (const name of [
     (["campus", "corridor", "lab", "roof"].includes(name) ? ".webp" : ".png");
   assets[name] = im;
 }
-const floorName = () =>
-  scene.type === "gate"
-    ? "부광고등학교 정문"
-    : scene.type === "arena"
-      ? subjects[scene.subject].room
-      : scene.type === "roof"
-        ? "옥상 · 기억의 균열"
-        : scene.floor + "층 중앙 복도";
+function floorName() {
+  if (scene.type === "classroom") return classroomDoor(scene.floor, scene.room).name;
+  if (scene.type === "gate") return "부광고등학교 정문";
+  if (scene.type === "arena") return subjects[scene.subject].room;
+  if (scene.type === "roof") return "옥상 · 기억의 균열";
+  return scene.floor + "층 중앙 복도";
+}
 const hasKey = (i) =>
   progress.learned.includes(i * 2) && progress.learned.includes(i * 2 + 1);
 function notify(msg) {
@@ -202,6 +212,8 @@ function load() {
       s.floor <= 5
     )
       scene = { type: "floor", floor: s.floor, subject: -1 };
+    if (s.type === "classroom" && classroomDoor(s.floor, s.room))
+      scene = { type: "classroom", floor: s.floor, room: s.room, subject: -1 };
     if (
       s.type === "arena" &&
       Number.isInteger(s.subject) &&
@@ -401,7 +413,9 @@ function showMap() {
         );
       })
       .join("") +
-      '<p class="small">층 이동은 각 층의 서쪽·중앙·동쪽 계단에서 ↑를 누르세요.</p>',
+      '<p class="small">' + (scene.type === "classroom"
+        ? floorName() + "의 앞문이나 뒷문에서 ↑를 누르면 " + scene.floor + "층 복도로 돌아갑니다."
+        : "층 이동은 각 층의 서쪽·중앙·동쪽 계단에서 ↑를 누르세요.") + "</p>",
   );
   miniMap();
   $("mapdetail").getContext("2d").drawImage($("mapview"), 0, 0);
@@ -713,6 +727,7 @@ function labChoice(name) {
   );
 }
 function objects() {
+  if (scene.type === "classroom") return [...sideStairs.classroom, classroomBoard];
   if (scene.type === "gate")
     return [
       ...sideStairs.gate,
@@ -735,7 +750,8 @@ function objects() {
   return sideStairs[scene.type];
 }
 function leaveByStair(stair) {
-  if (scene.type === "roof") go("floor", 5, stairX("floor", stair.side));
+  if (scene.type === "classroom") go("floor", scene.floor, classroomDoor(scene.floor, scene.room).x);
+  else if (scene.type === "roof") go("floor", 5, stairX("floor", stair.side));
   else if (scene.type === "arena")
     go("floor", 1, subjects[scene.subject].lab === "물리지학실" ? 1790 : 2090);
   else if (scene.floor > 1) go("floor", scene.floor - 1, stair.x);
@@ -780,6 +796,14 @@ function interact() {
   }
   if (o.type === "scholar") {
     quiz(o.id);
+    return;
+  }
+  if (o.room) {
+    go("classroom", scene.floor, sideStairs.classroom[0].x, -1, o.room);
+    return;
+  }
+  if (o.type === "board") {
+    bubble(classroomNotes[scene.floor - 3][scene.room - 1]);
     return;
   }
   if (o.name.endsWith("학실") || o.name === "물리지학실") {
@@ -833,6 +857,10 @@ function enemy(x, kind, boss = false) {
 }
 function platforms() {
   if (scene.type === "gate") return [];
+  if (scene.type === "classroom") return [
+    { x: 278 + (scene.room % 3) * 15, y: GROUND - 39, w: 80 },
+    { x: 732 + (scene.room % 4) * 13, y: GROUND - 39, w: 80 },
+  ];
   if (scene.type === "floor")
     return [
       { x: 335, y: GROUND - 22, w: 74 },
@@ -842,6 +870,16 @@ function platforms() {
   return [
     { x: 350, y: GROUND - 27, w: 85 },
     { x: 825, y: GROUND - 40, w: 76 },
+  ];
+}
+// Source rectangles, world positions and depths are shared by WebGL and Canvas 2D.
+function classroomPanels() {
+  return [
+    { sx: 0, sy: (scene.floor - 3) * H, sw: 1080, sh: H, x: 0, y: 0, w: worldWidth, h: H, z: -200 },
+    ...platforms().map((desk, index) => ({
+      sx: 2 + 136 * ((scene.room - 1 + index) % 3), sy: 1082, sw: 132, sh: 96,
+      x: desk.x - desk.w / 2, y: desk.y - 19, w: desk.w, h: 58, z: 0,
+    })),
   ];
 }
 function setScene() {
@@ -868,7 +906,7 @@ function setScene() {
     celebrate: 0,
     recover: 0,
   });
-  cam = clamp(player.x - W * 0.42, 0, Math.max(0, worldWidth - W));
+  cam = cameraTarget();
   shots = [];
   effects = [];
   texts = [];
@@ -885,8 +923,8 @@ function setScene() {
 // Travel commits immediately for saves, dialogue and controls. The renderer keeps
 // the last field frame on screen until the departure fade reaches full opacity.
 let sceneTransition = null;
-function go(type, f, x, sub = -1) {
-  if (scene.type !== type || scene.floor !== f || scene.subject !== sub) {
+function go(type, f, x, sub = -1, room) {
+  if (scene.type !== type || scene.floor !== f || scene.subject !== sub || scene.room !== room) {
     sceneTransition = {
       started: performance.now(),
       initialShade: Number($("scene-shade").style.opacity),
@@ -894,7 +932,7 @@ function go(type, f, x, sub = -1) {
     };
     $("scene-arrival").style.opacity = "0";
   }
-  scene = { type, floor: f, subject: sub };
+  scene = { type, floor: f, subject: sub, room };
   player.x = x;
   setScene();
   save();
@@ -1005,6 +1043,7 @@ function hurt(n) {
         scene.floor,
         scene.type === "floor" ? STAIR : 190,
         scene.subject,
+        scene.room,
       );
       player.recover = 0.35;
     };
@@ -1233,7 +1272,7 @@ function step(dt) {
   if (keys.has("KeyA")) attack();
   if (modal) return;
   cam +=
-    (clamp(p.x - W * 0.42, 0, Math.max(0, worldWidth - W)) - cam) *
+    (cameraTarget() - cam) *
     (1 - Math.exp(-dt * 7));
   for (let e of [...foes]) {
     if (e.dying) {

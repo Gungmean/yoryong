@@ -4,6 +4,18 @@
 
 왼쪽에서 오른쪽, 위에서 아래 순서로 첫 여덟 칸은 학자의 기술, 다음 네 칸은 보스의 공격, 마지막 네 칸은 발톱·대시·타격·균열입니다. 각 행의 크기와 기준점, 원소 결정의 단면, 불길·덩굴·날개의 변형은 `bake_combat_fx.py`에서 조정할 수 있습니다. Pillow를 설치한 뒤 저장소에서 `python art/bake_combat_fx.py`를 실행하면 실제 게임용 128프레임을 다시 만듭니다. [게임용 스프라이트 시트](../assets/combat/effects.webp)
 
+## 전투 중에 겹쳐 그리는 효과
+
+학자 소환진, 타격 파편, 속박 뿌리, 보스의 충전과 균열 등 21개 애니메이션을 330프레임의 투명 WebP 한 장에 담았습니다. 투사체의 궤적은 이동 중에 기록한 월드 좌표를 따라 그립니다. 보스의 발사 방향과 낙하 지점 표시는 공격 이펙트 위에 표시합니다. [전투 미리보기](combat-preview.webp)
+
+색상과 프레임 구간은 `art/bake_pixelfx.mjs`, 장면에서의 크기·방향·타이밍은 `combat-fx.js`에서 수정합니다. Node.js와 Pillow가 설치된 환경에서 아래 명령으로 시트와 기준점 목록을 다시 만들 수 있습니다. 생성한 이미지와 좌표는 게임에 포함되어 오프라인에서도 재생됩니다. [PixelFX 원본](https://github.com/patch-gg/pixelfx/tree/5294518ce7c72e48b6100a744596e0acf57f2826) · [MIT 라이선스 및 저작자 표기](../vendor/pixelfx-LICENSE.txt)
+
+```sh
+git clone https://github.com/patch-gg/pixelfx ../pixelfx
+git -C ../pixelfx checkout 5294518ce7c72e48b6100a744596e0acf57f2826
+node art/bake_pixelfx.mjs ../pixelfx
+```
+
 <details>
 <summary>두 원화에 사용한 생성 프롬프트</summary>
 

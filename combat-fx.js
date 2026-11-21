@@ -11,6 +11,103 @@ function combatEvent(type, x, y, seconds, details = {}) {
   effects.push({ type, x, y, max: seconds, life: seconds, ...details });
 }
 
+const disciplineSeals = ["orbitSeal", "reactionSeal", "livingSeal", "strataSeal"];
+// Contact is anchored at the victim's chest. Mendel's roots instead track its feet for the full slow.
+const scholarHits = [
+  { clip: "gravity", size: 1.16, dy: 2 },
+  { clip: "space", size: 1.19, dy: 4 },
+  { clip: "restore", size: 1.08, dy: 12 },
+  { clip: "prism", size: .89, dy: 2 },
+  null,
+  { clip: "wings", size: 1.02, dy: 0 },
+  { clip: "gravity", size: .6, dy: 16 },
+  { clip: "gravity", size: .72, dy: 9 },
+];
+const bossHits = ["field", "flask", "thicket", "meteor"];
+const bossWakes = ["orbit", "bubbles", "vine", "ember"];
+const scholarWakes = ["apple", "orbit", "bubbles", "prism", "vine", "wings"];
+
+// The atlas keeps the pivot of each simulation. A narrow particle cell can have its pivot outside the cell.
+function spellClip(name, t, x, y, scale = 1, alpha = 1, flip = false) {
+  if (!assets.spellFX.naturalWidth || alpha <= 0) return;
+  const [row, w, h, px, py, cols, frames] = spellClips[name];
+  const pose = reducedMotion.matches ? .29 : clamp(t, 0, 1);
+  const i = Math.min(frames - 1, Math.floor(pose * frames));
+  const left = x - (flip ? w - px : px) * scale;
+  if (left > W || left + w * scale < 0 || y - py * scale > H) return;
+  g.save();
+  g.globalAlpha *= Math.min(1, alpha);
+  g.translate(Math.round(x), Math.round(y));
+  if (flip) g.scale(-1, 1);
+  g.drawImage(assets.spellFX, (i % cols) * w, row + Math.floor(i / cols) * h, w, h,
+    -Math.round(px * scale), -Math.round(py * scale), Math.round(w * scale), Math.round(h * scale));
+  g.restore();
+}
+
+// Leaves, molecules and orbital rings use the local flight direction so even a turning swarm keeps its wake.
+function spellWake(s) {
+  if (!s.trail?.length || reducedMotion.matches || s.x - cam < -140 || s.x - cam > W + 140) return;
+  const motif = (s.team ? bossWakes : scholarWakes)[s.id];
+  const color = s.team ? subjects[s.id].color : spellLight[s.id];
+  g.save();
+  let front = s;
+  for (let i = 0; i < s.trail.length; i++) {
+    const p = s.trail[i], dx = front.x - p.x, dy = front.y - p.y;
+    front = p;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) continue;
+    const strength = 1 - i / 9, x = p.x - cam;
+    const phase = (s.age - i / 25) * 17 + (s.lane || 0) * 2;
+    const bend = Math.sin(phase) * (3 + i);
+    g.save();
+    g.translate(Math.round(x), Math.round(p.y));
+    g.transform(dx / length, dy / length, -dy / length, dx / length, 0, 0);
+    g.globalAlpha = strength * (motif === "prism" ? .64 : .86);
+    if (motif === "orbit") {
+      if (!(i % 2)) fxArc(0, 0, 3 + strength * 2, 6 + strength * 10, color, .35, 5.8, 2);
+      r(-2, bend, 4, 2, "#e1fbff");
+    } else if (motif === "bubbles") {
+      const size = 2 + (i % 3) * 1.5;
+      fxArc(0, bend, size, size, color);
+      r(-1, bend - size, 2, 2, "#fff5df");
+      if (i % 2) r(2, -bend * .8, 2, 3, color);
+    } else if (motif === "prism") {
+      fxLine([[0, bend], [length, Math.sin(phase + .68) * (2 + i)]], color, 2);
+      path([[-3, bend], [0, bend - 3], [3, bend], [0, bend + 3]], "#fff0ff");
+    } else if (motif === "vine" || motif === "apple") {
+      const side = i % 2 ? -1 : 1;
+      const leaf = motif === "apple" ? "#b9d674" : color;
+      fxLine([[0, bend], [length, bend * .7]], color, 2);
+      path([[0, bend], [-3, bend + 4 * side], [-9, bend + 7 * side], [-6, bend + side]], leaf);
+    } else if (motif === "wings") {
+      star(0, bend + (i % 2 ? 6 : -6), 2 + strength, i % 2 ? "#a9f4d2" : color);
+    } else {
+      fxLine([[3, bend], [-8 - strength * 4, bend * 1.4]], i % 2 ? "#ff9354" : "#ffcc73", 2);
+      r(-6, -bend, 2, 3, "#ffe3a1");
+    }
+    if (s.rift && i % 2) {
+      path([[0, -11], [3, -7], [0, -3], [-2, -7]], "#e0adff");
+    }
+    g.restore();
+  }
+  g.restore();
+}
+
+function bossCharge(e) {
+  const id = attackPattern(e), t = clamp(1 - e.warn / .85, 0, 1);
+  const x = e.x - cam, dir = player.x >= e.x ? 1 : -1;
+  const still = reducedMotion.matches;
+  if (e.kind === 4) spellClip("riftCharge", t, x + dir * 54, e.y - 80, .95, .92);
+  // Collect small copies of the actual attack core around the hand just before release.
+  const handX = x + dir * 42, handY = e.y - (id === 2 ? 15 : 46);
+  combatSprite(8 + id, still ? 2 : Math.floor(t * 8), handX, handY, .22 + .28 * t, dir < 0, .52 + .42 * t);
+  if (still) return;
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3 + t * 2, dist = 9 + 28 * (1 - t);
+    star(handX + Math.cos(a) * dist, handY + Math.sin(a) * dist * .7, 1 + 2 * t, subjects[id].color);
+  }
+}
+
 function combatSprite(row, frame, x, y, scale = 1, flip = false, alpha = 1, scaleY = scale) {
   const sheet = assets.combat;
   if (x < -200 * scale || x > W + 200 * scale || alpha <= 0) return;
@@ -190,6 +287,17 @@ function groundWave(e, x, y, t) {
   const reach = radius * (1 - (1 - t) ** 2.5);
   g.save();
   g.globalAlpha = Math.min(1, (1 - t) * 3);
+  if (core) {
+    // Two fronts travel from the epicentre to the outer rim of the damaging wave.
+    spellClip("core", t, x, y - 2, .66, .70);
+    for (const side of [-1, 1]) spellClip("quake", t, x + side * reach * .62, y, .86, .93, side < 0);
+  } else if (fault) {
+    spellClip("fault", t, x, y, .82);
+  } else if (e.id === 0) {
+    spellClip("gravity", t, x, y - 4, 1.48);
+  } else {
+    spellClip("reactionSeal", t, x, y - 2, 1.04, .87);
+  }
   fxArc(x, y, reach, 4 + reach * 0.065, color, 0, Math.PI * 2, core ? 3 : 2);
   fxArc(x, y - 2, reach * 0.84, 3 + reach * 0.035, "#fff3bd", Math.PI, Math.PI * 2);
   for (const side of [-1, 1]) {
@@ -229,12 +337,14 @@ function groundWave(e, x, y, t) {
 }
 
 function drawCombatGround() {
+  for (const s of shots) spellWake(s);
   for (const e of foes) {
     if (e.slow <= 0 || e.dying) continue;
     const pose = reducedMotion.matches ? 2 : Math.floor(clock * 10);
     const x = e.x - cam,
       width = e.boss ? 0.48 : 0.35,
       alpha = Math.min(1, e.slow * 4);
+    spellClip("roots", 1 - e.slow / 2.2, x, e.y, e.boss ? 1.55 : .98, alpha);
     combatSprite(4, pose, x + 12, e.y - 7, width, false, alpha);
     combatSprite(4, pose + 3, x - 12, e.y - 5, width, true, alpha);
   }
@@ -244,6 +354,14 @@ function drawCombatGround() {
       t = 1 - e.life / e.max;
     if (x < -260 || x > W + 260) continue;
     if (e.type === "wave") groundWave(e, x, y, t);
+    if (e.type === "bossRelease") {
+      const flip = e.dir < 0, alpha = Math.min(1, e.life * 6);
+      if (e.rift) spellClip("riftBurst", t * .7, x, y - 70, .68, alpha * .8);
+      spellClip(disciplineSeals[e.id], .48 + .5 * t, x, y, 1 + .24 * t, alpha * .78);
+      // Recoil happens at the caster. Falling attacks keep a separate marker at the landing site.
+      if (!reducedMotion.matches) splinters(x + e.dir * 27, y - (e.id === 2 ? 15 : 46), t, 48, subjects[e.id].color);
+      if (e.id === 0) spellClip("space", t, x + e.dir * 34, y - 30, .72, alpha, flip);
+    }
     if (e.type === "discovery") {
       const lift = 20 * (1 - (1 - t) ** 2), opacity = Math.min(1, (1 - t) * 3);
       combatSprite(e.id, Math.floor(t * 8), x, y - 78 - lift, .55, false, opacity);
@@ -257,18 +375,27 @@ function drawCombatGround() {
       const glow = Math.min(1, e.life * 3),
         feet = y - 10 * t,
         c = spellLight[e.id];
+      spellClip(disciplineSeals[e.id >> 1], t, x, feet, .64 + .28 * Math.min(1, t * 4), glow);
       g.save();
       g.globalAlpha = 0.84 * glow;
       fxArc(x, feet, 26 + 10 * t, 6, c);
       fxArc(x, feet - 2, 20 + 9 * t, 4, "#fff1c5", Math.PI, Math.PI * 2);
       drawActor("scholar" + e.id, 4 + Math.min(3, Math.floor(t * 4)), x, feet, 74, e.flip);
       g.restore();
+      if (t < .74) {
+        const pulse = Math.sin(t / .74 * Math.PI), dir = e.flip ? -1 : 1;
+        combatSprite(e.id, Math.floor(t * 10), x + dir * (20 + 9 * t), feet - 27,
+          .26 + .12 * pulse, e.flip, pulse * .92);
+      }
     }
     if (["jump", "doubleJump", "land", "heal"].includes(e.type)) {
       const double = e.type === "doubleJump",
         heal = e.type === "heal",
         land = e.type === "land";
       const radius = (double ? 53 : heal ? 36 : land ? 42 : 29) * (0.34 + 0.66 * t);
+      if (heal) spellClip("restore", t, player.x - cam, player.y, 1.22, Math.min(1, e.life * 7));
+      if (land || e.type === "jump") spellClip("dust", t, x, y, land ? .81 : .55, (1 - t) * .76);
+      if (double) spellClip("wings", t, x, y - 2, .58, (1 - t) * .82);
       g.save();
       g.globalAlpha = (1 - t) * 0.9;
       fxArc(x, y - (heal ? 30 * t : 0), radius, 3 + radius * 0.12, heal ? "#ffe58b" : "#b7f3ff");
@@ -296,8 +423,10 @@ function drawCombatGround() {
       g.restore();
     }
   }
-  for (const e of foes) if (e.boss && e.warn > 0) warningPath(e);
-  for (const s of shots) if (s.team && !s.vx) warningMark(s.x - cam, 1, subjects[s.id].color);
+  for (const e of foes) if (e.boss && e.warn > 0) {
+    const t = 1 - e.warn / .85;
+    spellClip(disciplineSeals[attackPattern(e)], t, e.x - cam, e.y - 2, .72 + t * .28, .5 + .35 * t);
+  }
 }
 
 function drawCombatShot(s) {
@@ -323,7 +452,7 @@ function drawCombatShot(s) {
     return;
   }
   if (s.id === 5 && !staticPose && s.trail) {
-    for (let i = s.trail.length - 1; i >= 1; i -= 2) {
+    for (let i = Math.min(5, s.trail.length - 1); i >= 1; i -= 2) {
       const p = s.trail[i];
       combatSprite(
         5,
@@ -348,6 +477,7 @@ function drawCombatAccent(e) {
   if (x < -180 || x > W + 180) return;
   if (e.type === "slash") {
     const reach = 69 + 22 * Math.sin(Math.PI * t);
+    spellClip("talons", t, x + e.dir * 33, y - 6, 1.08, fade, e.dir < 0);
     combatSprite(FX_CLAW, frame, x + e.dir * reach, y - 3, 1, e.dir < 0, fade);
   } else if (e.type === "impact" || e.type === "hurt" || e.type === "enemyImpact") {
     const hurt = e.type === "hurt",
@@ -356,7 +486,7 @@ function drawCombatAccent(e) {
     const scale = hurt ? 0.68 : enemy ? 0.75 : e.id >= 0 ? 0.89 : 0.71;
     g.save();
     g.globalAlpha = fade;
-    if (enemy && e.rift) combatSprite(FX_RIFT, frame, x, y, 0.66);
+    if (enemy && e.rift) spellClip("riftBurst", t, x, y, .57, .88);
     if (!enemy && e.id === 1) {
       fxArc(x, y, 8 + 26 * t, 18 + 31 * t, "#85e8ff", 0, Math.PI * 2, 3);
       fxArc(x, y, 5 + 14 * t, 12 + 28 * t, "#f3ffff");
@@ -367,12 +497,24 @@ function drawCombatAccent(e) {
         combatSprite(5, frame + side, x + side * (8 + 30 * t), y - 34 * t, 0.43, side < 0);
     }
     g.restore();
-    combatSprite(FX_BURST, frame, x, y, scale, false, fade * 0.93);
+    // Keep the common contact flash short so the individual material reads on the follow-through.
+    combatSprite(FX_BURST, frame, x, y, scale * (enemy || e.id >= 0 ? .63 : .87), false, fade * Math.max(0, 1 - t * 2));
+    if (enemy) {
+      const size = [.92, 1.3, .64, .82][e.id];
+      spellClip(bossHits[e.id], t, x, y + (e.id === 0 ? 12 : 0), size, fade, e.id === 2 && e.dir > 0);
+    } else if (e.id >= 0) {
+      const contact = scholarHits[e.id];
+      if (contact) spellClip(contact.clip, t, x, y + contact.dy, contact.size, fade, e.dir < 0);
+      if (e.id === 7) fxArc(x, y, 7 + 31 * t, 5 + 13 * t, "#ffd586", Math.PI * .15, Math.PI * 1.82);
+    } else {
+      spellClip("gravity", t, x, y, hurt ? .85 : 1.03, fade);
+    }
     if (!reducedMotion.matches) splinters(x, y, t, scale * 75, color, 8);
   } else if (e.type === "defeat") {
     const color = subjects[e.kind]?.color || "#edc878",
       scale = e.boss ? 1.45 : 0.62;
     if (e.boss) combatSprite(FX_RIFT, frame, x, y, scale * (0.46 + 0.55 * t), false, 0.67 * fade);
+    if (e.boss) spellClip(e.kind === 4 ? "riftBurst" : bossHits[e.kind], t, x, y + (e.kind === 4 ? 0 : 23), e.kind === 4 ? 1.45 : 1.02, fade);
     combatSprite(FX_BURST, frame, x, y, scale, false, fade);
     if (!reducedMotion.matches) splinters(x, y, t, scale * 85, color, e.boss ? 18 : 8);
   }

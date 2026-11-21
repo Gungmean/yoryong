@@ -45,6 +45,7 @@ let hp = 100,
   texts = [],
   cool = Array(8).fill(0),
   shake = 0,
+  contactPause = 0,
   near = null,
   resumeFoe = null;
 const mapWidths = { gate: 1140, floor: 2290, arena: 1040, roof: 1040, classroom: 1080 };
@@ -83,6 +84,8 @@ assets.classrooms = new Image();
 assets.classrooms.src = classroomAtlasURL;
 assets.combat = new Image();
 assets.combat.src = "assets/combat/effects.webp";
+assets.spellFX = new Image();
+assets.spellFX.src = "assets/combat/pixelfx.webp";
 for (const theme of ["hall", "gate", "arena", "roof"]) {
   const tile = new Image();
   tile.src = "assets/stairs/" + theme + ".webp";
@@ -883,6 +886,7 @@ function classroomPanels() {
   ];
 }
 function setScene() {
+  contactPause = 0;
   worldWidth = mapWidths[scene.type];
   player.x = clamp(player.x, 20, worldWidth - 20);
   Object.assign(player, {
@@ -993,14 +997,15 @@ function winBoss(i) {
     "모험 계속하기",
   );
 }
-function hitFoe(e, n, skill = -1) {
+function hitFoe(e, n, skill = -1, dir = player.face) {
   if (e.dying || !foes.includes(e)) return;
   e.hp = Math.max(0, e.hp - n);
   e.hit = 0.19;
   texts.push({ x: e.x, y: e.y - (e.boss ? 83 : 34), n, life: 0.68 });
   spark(e.x, e.y - 28, "#ffe39b", 8);
-  if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.max - fx.life < .065)) {
-    combatEvent("impact", e.x, e.y - (e.boss ? 39 : 20), .31, { id: skill, target: e });
+  if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.id === skill && fx.max - fx.life < .065)) {
+    combatEvent("impact", e.x, e.y - (e.boss ? 39 : 20), .36, { id: skill, dir, target: e });
+    if (!reducedMotion.matches) contactPause = Math.max(contactPause, e.hp === 0 && e.boss ? .05 : 1 / 60);
   }
   shake = Math.max(shake, 2);
   if (e.hp <= 0) {
@@ -1179,6 +1184,7 @@ function enemyShot(e) {
   const k = attackPattern(e);
   if (e.kind === 4) e.step++;
   let dir = player.x >= e.x ? 1 : -1;
+  combatEvent("bossRelease", e.x, e.y, .38, { id: k, dir, rift: e.kind === 4 });
   if (k === 1 || k === 3) {
     for (let n = 0; n < (k === 3 ? 3 : 1); n++)
       shots.push({
@@ -1208,6 +1214,10 @@ function enemyShot(e) {
 }
 function step(dt) {
   if (modal) return;
+  if (contactPause > 0) {
+    contactPause = Math.max(0, contactPause - dt);
+    return;
+  }
   clock += dt;
   const p = player;
   for (const k of [
@@ -1340,11 +1350,12 @@ function step(dt) {
         s.vx = Math.cos(a) * 290;
         s.vy = Math.sin(a) * 290;
       }
-      if (!reducedMotion.matches && Math.floor(s.age * 18) !== Math.floor((s.age - dt) * 18)) {
-        s.trail ??= [];
-        s.trail.unshift({ x: s.x, y: s.y, flip: s.vx < 0 });
-        if (s.trail.length > 5) s.trail.pop();
-      }
+    }
+    // Sample world positions before movement so trails follow turns, camera motion and falling shots.
+    if (!reducedMotion.matches && s.id !== 6 && (!s.trail || Math.floor(s.age * 25) !== Math.floor((s.age - dt) * 25))) {
+      s.trail ??= [];
+      s.trail.unshift({ x: s.x, y: s.y, flip: s.vx < 0 });
+      if (s.trail.length > 8) s.trail.pop();
     }
     s.x += s.vx * dt;
     s.y += s.vy * dt;
@@ -1353,7 +1364,7 @@ function step(dt) {
       if (contact || s.y > GROUND) {
         if (contact) hurt(s.dmg);
         s.life = 0;
-        combatEvent("enemyImpact", s.x, Math.min(GROUND - 3, s.y), .32, { id: s.id, rift: s.rift });
+        combatEvent("enemyImpact", s.x, Math.min(GROUND - 3, s.y), .47, { id: s.id, rift: s.rift, dir: Math.sign(s.vx) || 1 });
       }
     } else if (s.area) {
       if (s.y >= GROUND - 25) {
@@ -1367,7 +1378,7 @@ function step(dt) {
           max: 0.45,
         });
         for (let e of [...foes])
-          if (Math.abs(e.x - s.x) < s.area) hitFoe(e, s.dmg, s.id);
+          if (Math.abs(e.x - s.x) < s.area) hitFoe(e, s.dmg, s.id, s.dir);
       }
     } else {
       let e = foes.find(
@@ -1377,7 +1388,7 @@ function step(dt) {
       );
       if (e) {
         if (s.id === 4) e.slow = 2.2;
-        hitFoe(e, s.dmg, s.id);
+        hitFoe(e, s.dmg, s.id, Math.sign(s.vx) || s.dir);
         s.life = 0;
       }
     }

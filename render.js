@@ -521,6 +521,7 @@ function character() {
   const frame = heroFrame(p);
   if (p.dash > 0) {
     const dashFrame = Math.min(7, Math.floor((1 - p.dash / .19) * 8));
+    if (p.grounded) spellClip("dust", 1 - p.dash / .19, x - p.face * 28, p.y, .68, .76, f);
     combatSprite(FX_DASH, dashFrame, x, p.y - 22, 1, f, reducedMotion.matches ? .55 : .93);
     for (let i = 1; i <= (reducedMotion.matches ? 0 : 3); i++) {
       g.globalAlpha = 0.29 / i;
@@ -569,7 +570,7 @@ function monsters() {
   }
 }
 function particles() {
-  for (const s of shots) drawCombatShot(s);
+  for (const s of shots) if (!s.team) drawCombatShot(s);
   for (const e of effects) {
     let x = e.x - cam, y = e.y;
     if (e.type === "spark") {
@@ -603,6 +604,16 @@ function particles() {
         "#fff1cb",
       );
     }
+  }
+  // Warning lines, marked landing sites and enemy cores stay legible over friendly explosions.
+  for (const e of foes) if (e.boss && e.warn > 0) {
+    bossCharge(e);
+    warningPath(e);
+  }
+  for (const s of shots) {
+    if (!s.team) continue;
+    if (!s.vx) warningMark(s.x - cam, 1, subjects[s.id].color);
+    drawCombatShot(s);
   }
   for (let t of texts) {
     word(String(t.n), t.x - cam + 1, t.y + 1, 19, "#493a35");

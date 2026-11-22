@@ -334,17 +334,17 @@ function statusBars() {
     $(id + "val").textContent = Math.ceil(n) + "/" + max;
   }
   const b = foes.find((e) => e.boss);
-  const bossBar = $("bossbar");
-  bossBar.hidden = !b;
+  const meter = $("boss-meter");
+  meter.hidden = !b;
+  const warning = b?.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint : "";
+  if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
   if (b) {
     const health = (100 * b.hp) / b.max;
-    const warning = b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint : "";
-    if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
-    if ($("bossname").textContent !== subjects[b.kind].boss) $("bossname").textContent = subjects[b.kind].boss;
-    const phase = bossPhase(b) + " / 2단계";
-    if ($("bossphase").textContent !== phase) $("bossphase").textContent = phase;
-    bossBar.style.setProperty("--boss-health", health + "%");
-    $("boss-meter").setAttribute("aria-valuenow", String(Math.ceil(health)));
+    const percent = Math.ceil(health);
+    meter.style.setProperty("--boss-health", health + "%");
+    meter.setAttribute("aria-label", subjects[b.kind].boss + " 체력");
+    meter.setAttribute("aria-valuenow", String(percent));
+    meter.setAttribute("aria-valuetext", percent + "% · " + bossPhase(b) + "단계");
   }
   document.querySelectorAll(".slot .timer").forEach((el, i) => {
     let cd = i ? cool[progress.slots[i - 1]] : 0;

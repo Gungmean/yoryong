@@ -1027,7 +1027,8 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
   texts.push({ x: e.x, y: chest - (e.boss ? 33 : 14), n, life: 0.68 });
   spark(e.x, chest - 8, "#ffe39b", 8);
   if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.id === skill && fx.max - fx.life < .065)) {
-    playEffect("hit", skill >= 0 ? .82 : 1);
+    if (skill < 0) playEffect("hit");
+    else if (!skillSounds[skill].onGround) playEffect(skillSounds[skill].impact);
     combatEvent("impact", e.x, chest, .36, { id: skill, dir, target: e });
     if (!reducedMotion.matches) contactPause = Math.max(contactPause, e.hp === 0 && e.boss ? .05 : 1 / 60);
   }
@@ -1146,7 +1147,7 @@ function cast(slot) {
     max: 0.7,
     life: 0.7,
   });
-  playEffect(skillSounds[id]);
+  playEffect(skillSounds[id].cast);
   const dmg = scholars[id][9];
   if ([0, 2].includes(id)) {
     shots.push({
@@ -1176,6 +1177,7 @@ function cast(slot) {
         team: 0,
       });
   } else if (id === 7) {
+    playEffect(skillSounds[id].impact);
     effects.push({
       type: "wave",
       x,
@@ -1203,7 +1205,6 @@ function cast(slot) {
   }
   if (id === 2) {
     hp = Math.min(100, hp + 10);
-    playEffect("recovery", .65);
     combatEvent("heal", x, player.y, .55);
   }
   statusBars();
@@ -1363,6 +1364,7 @@ function step(dt) {
     } else if (s.area) {
       if (s.y >= GROUND - 25) {
         s.life = 0;
+        playEffect(skillSounds[s.id].impact);
         effects.push({
           type: "wave",
           id: s.id,

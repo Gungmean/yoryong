@@ -37,7 +37,7 @@ function currentQuest() {
 
 let trackedQuest, routeLegs = [], activeLeg;
 const freeExplore = "학자들을 다시 만나거나 교실을 둘러보세요.";
-const floorLabel = f => f === 6 ? "옥상" : f + "층";
+const floorLabel = f => f === 6 ? "옥상" : f === 0 ? "교문" : f + "층";
 
 // Only the immediate, usable doorway belongs on the compass. Rebuild the legs
 // on travel or progression; the player and a moving boss can change x every frame.
@@ -58,8 +58,15 @@ function buildQuestRoute(q) {
     ? scholarPoint(q.id)
     : q.floor === 1 ? hallBays[1].find(p => p.name === subjects[q.id].lab) : null;
   if (scene.floor !== q.floor) {
-    return stairs.map(p => passage(p, p.name + "에서 ↑를 누르고 " + floorLabel(q.floor) + "을 선택하세요.",
-      destination ? Math.abs(p.x - destination.x) : 0));
+    const direction = Math.sign(q.floor - scene.floor);
+    const next = scene.floor + direction;
+    const key = direction > 0 ? "↑" : "↓";
+    const movement = direction > 0 ? "올라가세요." : "내려가세요.";
+    return stairs.map(point => ({
+      point, direction, next,
+      cue: point.name + "에서 " + key + "를 눌러 " + floorLabel(next) + "으로 " + movement,
+      onward: destination ? Math.abs(point.x - destination.x) : 0,
+    }));
   }
   if (q.kind === "trial")
     return [passage(destination, destination.name + " 곁에서 ↑를 눌러 시련에 도전하세요.")];

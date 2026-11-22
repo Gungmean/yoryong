@@ -460,7 +460,7 @@ function drawQuestArrow(x) {
   const dx = leg.point.x - player.x;
   const atPoint = besideQuestTarget();
   const bossInReach = leg.point.boss && Math.abs(dx) < leg.point.half + 25;
-  const turn = atPoint ? -1 : (Math.abs(dx) < 10 || bossInReach) ? 1 : dx < 0 ? 2 : 0;
+  const turn = atPoint ? -(leg.direction || 1) : (Math.abs(dx) < 10 || bossInReach) ? 1 : dx < 0 ? 2 : 0;
   const bob = reducedMotion.matches ? 0 : Math.round(Math.sin(clock * 3.5) * 1.5);
   const y = Math.max(13, player.y - (atPoint ? 96 : 72) + bob);
   g.save();
@@ -498,18 +498,26 @@ function character() {
     label("요룡이", x, p.y + 5, "#fff4db", "#2c303b", 8);
   if (near) {
     let action = near.name;
+    let key = "↑ ";
     if (near.type === "scholar") action = targetHere ? near.name + " · 대화" : "대화";
     else if (near.room) action += " 입장";
     else if (near.name === "매점") action = "회복";
     else if (near.type === "stair") {
       if (scene.type === "classroom") action += " · 복도로";
-      else if (scene.type === "roof") action = "5층으로";
+      else if (scene.type === "roof") { key = "↓ "; action = "5층으로"; }
       else if (scene.type === "gate") action = "본관 1층으로";
       else if (scene.type === "arena") action = "복도로";
-      else if (targetHere) action = near.name + " · " + floorLabel(trackedQuest.floor) + " 선택";
+      else if (targetHere) {
+        key = activeLeg.direction < 0 ? "↓ " : "↑ ";
+        action = floorLabel(activeLeg.next) + "으로";
+      } else {
+        const up = scene.floor === 5 && progress.cleared.length < 4 ? "옥상 잠김" : floorLabel(scene.floor + 1);
+        const down = scene.floor > 1 || near.side !== "center" ? " · ↓ " + floorLabel(scene.floor - 1) : "";
+        action = up + down;
+      }
     }
     const secondary = activeLeg && !targetHere;
-    const prompt = "↑ " + action;
+    const prompt = key + action;
     fieldFont(9);
     const margin = Math.ceil(ink.measureText(prompt).width / inkScaleX / 2) + 8;
     label(prompt, clamp(x, margin, W - margin), p.y + (secondary ? 5 : -79), secondary ? "#e0e3ea" : "#ffdda0", "#282e3a", 9);

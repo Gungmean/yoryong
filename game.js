@@ -364,7 +364,7 @@ function show(kind, title, body, canClose = true) {
   player.buffer = 0;
   $("overlay").hidden = false;
   const marks = { menu: "globe", map: "zelkova", equip: "slots", quest: "quest",
-    stairs: "stairs", lab: "flask", down: "rose", ending: "globe", seal: "globe",
+    lab: "flask", down: "rose", ending: "globe", seal: "globe",
     dialogue: "quest", quiz: "atom", help: "map", reset: "globe" };
   $("panel").innerHTML = `<div class="panel-head"><i data-icon="${marks[kind]}"></i>
     <div class="book-title"><h2 id="paneltitle">${title}</h2>
@@ -452,7 +452,7 @@ function showMap() {
       .join("") +
       '<p class="small">' + (scene.type === "classroom"
         ? floorName() + "의 앞문이나 뒷문에서 ↑를 누르면 " + scene.floor + "층 복도로 돌아갑니다."
-        : "층 이동은 각 층의 서쪽·중앙·동쪽 계단에서 ↑를 누르세요.") + "</p>",
+        : "서쪽·중앙·동쪽 계단 옆에서 ↑로 바로 위층, ↓로 바로 아래층에 갈 수 있습니다.") + "</p>",
   );
   miniMap();
   $("mapdetail").getContext("2d").drawImage($("mapview"), 0, 0);
@@ -616,59 +616,9 @@ function showHelp() {
     ["← →", "좌우 이동"], ["Alt", "점프 · 공중에서 더블 점프"],
     ["↓ + Alt", "발판 내려오기"], ["Shift", "회피 대시"],
     ["A", "기본 공격"], ["Q W E R", "장착한 스킬 사용"], ["K", "스킬 배치"],
-    ["↑", "대화 · 입장 · 계단"], ["↓", "계단에서 한 층 내려가기"],
-    ["1–6", "답 또는 층 선택"], ["M", "캠퍼스 지도"], ["J", "모험 일지"], ["Esc", "메뉴 · 닫기"]
+    ["↑", "대화 · 입장 · 계단 한 층 올라가기"], ["↓", "계단에서 한 층 내려가기"],
+    ["숫자", "문제 답 고르기"], ["M", "캠퍼스 지도"], ["J", "모험 일지"], ["Esc", "메뉴 · 닫기"]
   ].map(([key, action]) => `<div class="help-row"><kbd>${key}</kbd><span>${action}</span></div>`).join(""));
-}
-function showStairs(stair) {
-  show(
-    "stairs",
-    stair.name,
-    '<p class="small">이동할 층을 선택하세요. 현재 ' +
-      scene.floor +
-      "층입니다.</p>" +
-      [6, 5, 4, 3, 2, 1]
-        .map(
-          (f) =>
-            '<button class="rowbtn" data-floor="' +
-            f +
-            '" ' +
-            (f === scene.floor || (f === 6 && progress.cleared.length < 4)
-              ? "disabled"
-              : "") +
-            "><b>" +
-            (f === 6 ? "옥상" : f + "층") +
-            (trackedQuest.floor === f && f !== scene.floor ? ' <em class="quest-choice">퀘스트 목적지</em>' : "") +
-            "</b><span>" +
-            (f === 6
-              ? progress.cleared.length < 4
-                ? "잠김 · 인장 " + progress.cleared.length + "/4"
-                : "기억의 균열"
-              : f === 1
-                ? "중앙 현관 · 과학실"
-                : subjects[f - 2].name + "의 시련") +
-            (f === scene.floor ? "　◆" : "") +
-            "</span></button>",
-        )
-        .join("") +
-      (scene.floor === 1 && stair.side !== "center"
-        ? '<button class="rowbtn" data-floor="0"><b>교문</b><span>바깥 계단으로</span></button>'
-        : ""),
-  );
-  document.querySelectorAll("[data-floor]").forEach(
-    (el) =>
-      (el.onclick = () => {
-        let f = Number(el.dataset.floor);
-        closePanel();
-        if (f === 6)
-          enterBattle(
-            4,
-            stair.side === "center" ? 190 : stairX("roof", stair.side),
-          );
-        else if (f === 0) go("gate", 0, stairX("gate", stair.side));
-        else go("floor", f, stair.x);
-      }),
-  );
 }
 function quiz(id) {
   const s = scholars[id];
@@ -802,14 +752,35 @@ function objects() {
   }
   return sideStairs[scene.type];
 }
-function leaveByStair(stair) {
-  if (scene.type === "classroom") go("floor", scene.floor, classroomDoor(scene.floor, scene.room).x);
-  else if (scene.type === "roof") go("floor", 5, stairX("floor", stair.side));
-  else if (scene.type === "arena")
+function travelStair(stair, direction) {
+  if (scene.type === "classroom") {
+    go("floor", scene.floor, classroomDoor(scene.floor, scene.room).x);
+    return;
+  }
+  if (scene.type === "arena") {
     go("floor", 1, subjects[scene.subject].lab === "물리지학실" ? 1790 : 2090);
-  else if (scene.floor > 1) go("floor", scene.floor - 1, stair.x);
-  else if (scene.type === "floor" && stair.side !== "center")
-    go("gate", 0, stairX("gate", stair.side));
+    return;
+  }
+  if (sceneTransition?.arrived === null && !reducedMotion.matches) return;
+  if (scene.type === "roof") {
+    if (direction < 0) go("floor", 5, stairX("floor", stair.side));
+    else notify("↓를 눌러 5층으로 내려갈 수 있어요.");
+    return;
+  }
+  if (scene.type !== "floor") return;
+  const next = scene.floor + direction;
+  if (next === 6) {
+    if (progress.cleared.length < 4) {
+      notify("옥상 문을 열려면 과학의 인장 4개가 필요해요. " + progress.cleared.length + "/4");
+      return;
+    }
+    enterBattle(4, stair.side === "center" ? 190 : stairX("roof", stair.side));
+  } else if (next === 0) {
+    if (stair.side !== "center") go("gate", 0, stairX("gate", stair.side));
+    else notify("교문으로 가려면 중앙 현관이나 양끝 계단을 이용하세요.");
+  } else {
+    go("floor", next, stair.x);
+  }
 }
 function findNear() {
   return objects()
@@ -844,8 +815,7 @@ function interact() {
     return;
   }
   if (o.type === "stair") {
-    if (scene.type === "floor") showStairs(o);
-    else leaveByStair(o);
+    travelStair(o, 1);
     return;
   }
   if (o.type === "scholar") {
@@ -1029,13 +999,10 @@ function winBoss(i) {
           "ending",
           "부광의 아침을 되찾았다!",
           '<div class="award-seals">' + subjectIcons.map(name => '<i data-icon="earned-' + name + '"></i>').join("") +
-          '</div><p>요룡이의 과학 모험을 완주했습니다.</p><div class="floorrow"><b>과학의 인장</b><span>4 / 4</span></div><div class="floorrow"><b>학자의 시련</b><span>8 / 8</span></div><button class="confirm" id="afterend">학교로 돌아가기</button>',
+          '</div><p>요룡이의 과학 모험을 완주했습니다.</p><div class="floorrow"><b>과학의 인장</b><span>4 / 4</span></div><div class="floorrow"><b>학자의 시련</b><span>8 / 8</span></div><button class="confirm" id="afterend">옥상 둘러보기</button>',
           false,
         );
-        $("afterend").onclick = () => {
-          closePanel();
-          go("floor", 1, 580);
-        };
+        $("afterend").onclick = closePanel;
       },
     );
     return;
@@ -1051,7 +1018,7 @@ function winBoss(i) {
       subjects[i].seal +
       "</b>을 되찾았다! " +
       (progress.cleared.length === 4
-        ? "네 인장이 모두 빛난다. 계단 위, 옥상 문이 열렸다!"
+        ? "네 인장이 모두 빛난다. 5층을 지나 열린 옥상으로 올라가자!"
         : "다른 실험실에도 아직 과학의 기억이 남아 있어."),
     "모험 계속하기",
   );
@@ -1468,9 +1435,9 @@ function press(code, repeat = false) {
   if (["KeyQ", "KeyW", "KeyE", "KeyR"].includes(code))
     cast(slotKeys.indexOf(code.slice(-1)));
   if (code === "ArrowUp" || code === "Enter") interact();
-  if(code==="ArrowDown" && !foes.some(e=>e.boss&&e.dying)){
-    const stair=findNear();
-    if(stair?.type==="stair" && scene.type!=="gate") leaveByStair(stair);
+  if (code === "ArrowDown" && !foes.some(e => e.boss && e.dying)) {
+    const stair = findNear();
+    if (stair?.type === "stair") travelStair(stair, -1);
   }
 }
 const gameKeys = new Set([
@@ -1510,14 +1477,9 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   const digit = /^(?:Digit|Numpad)([0-6])$/.exec(e.code);
-  if (digit && (modal === "quiz" || modal === "stairs")) {
+  if (digit && modal === "quiz") {
     if (!e.repeat) {
-      const n = Number(digit[1]);
-      const selector =
-        modal === "quiz"
-          ? '[data-answer="' + (n - 1) + '"]'
-          : '[data-floor="' + n + '"]';
-      $("panel").querySelector(selector)?.click();
+      $("panel").querySelector('[data-answer="' + (Number(digit[1]) - 1) + '"]')?.click();
     }
     e.preventDefault();
     return;

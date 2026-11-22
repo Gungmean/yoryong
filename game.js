@@ -10,8 +10,7 @@ let W = 800,
   cam = 0,
   clock = 0,
   modal = "",
-  sound = false,
-  audio,
+  sound = true,
   toastUntil = 0,
   lastSaved = 0;
 let scene = { type: "gate", floor: 0, subject: -1 },
@@ -187,30 +186,6 @@ for (const event of ["keydown", "pointerup", "click"]) {
 document.addEventListener("visibilitychange", syncMusic);
 window.addEventListener("pagehide", pauseMusic);
 window.addEventListener("pageshow", syncMusic);
-function tone(freq = 360, duration = 0.1, type = "sine") {
-  if (!sound) return;
-  try {
-    audio ??= new (window.AudioContext || window.webkitAudioContext)();
-    audio.resume();
-    let osc = audio.createOscillator(),
-      gain = audio.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audio.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(
-      freq * 0.76,
-      audio.currentTime + duration,
-    );
-    gain.gain.setValueAtTime(0.055, audio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      audio.currentTime + duration,
-    );
-    osc.connect(gain);
-    gain.connect(audio.destination);
-    osc.start();
-    osc.stop(audio.currentTime + duration);
-  } catch {}
-}
 function parseSave(raw) {
   try { return JSON.parse(raw); } catch { return null; }
 }
@@ -294,7 +269,7 @@ function load() {
     player.x = Number.isFinite(d.x) ? d.x : GATE_START;
     hp = clamp(Number(d.hp) || 100, 1, 100);
     mp = clamp(Number(d.mp) || 0, 0, 60);
-    sound = !!d.sound;
+    sound = d.sound !== false;
     musicEnabled = d.musicEnabled !== false;
     sceneryPaused = d.sceneryPaused === true;
     resumeFoe = d.encounter;
@@ -352,6 +327,7 @@ function statusBars() {
   });
 }
 function show(kind, title, body, canClose = true) {
+  if (["menu", "map", "equip", "quest", "help", "seal"].includes(kind)) playEffect("select");
   if (!modal) {
     returnFocus = document.activeElement?.closest("#shell button") || $("world");
     for (const child of $("shell").children) child.inert = child !== $("overlay");
@@ -575,7 +551,10 @@ function menu() {
     sound = !sound;
     $("sound").setAttribute("aria-pressed", String(sound));
     $("sound").lastElementChild.textContent = sound ? "켜짐" : "꺼짐";
-    tone(650);
+    if (sound) {
+      unlockEffects();
+      playEffect("select");
+    } else stopEffects();
     save();
   };
   $("full").onclick = toggleFullscreen;
@@ -666,7 +645,7 @@ function quiz(id) {
       (el) =>
         (el.onclick = () => {
           if (+el.dataset.answer !== s[6]) {
-            tone(140);
+            playEffect("wrong");
             ask("조금 더 생각해 보자. 다른 답을 골라 보세요.");
             return;
           }
@@ -678,7 +657,7 @@ function quiz(id) {
           save();
           refresh();
           announceQuest(trialQuests[id]);
-          tone(820, 0.25);
+          playEffect("correct");
           dialogue(
             s[0],
             "scholar" + id,
@@ -754,31 +733,39 @@ function objects() {
 }
 function travelStair(stair, direction) {
   if (scene.type === "classroom") {
+    playEffect("door");
     go("floor", scene.floor, classroomDoor(scene.floor, scene.room).x);
     return;
   }
   if (scene.type === "arena") {
+    playEffect("door");
     go("floor", 1, subjects[scene.subject].lab === "물리지학실" ? 1790 : 2090);
     return;
   }
   if (sceneTransition?.arrived === null && !reducedMotion.matches) return;
   if (scene.type === "roof") {
-    if (direction < 0) go("floor", 5, stairX("floor", stair.side));
-    else notify("↓를 눌러 5층으로 내려갈 수 있어요.");
+    if (direction < 0) {
+      playEffect("stairs");
+      go("floor", 5, stairX("floor", stair.side));
+    } else notify("↓를 눌러 5층으로 내려갈 수 있어요.");
     return;
   }
   if (scene.type !== "floor") return;
   const next = scene.floor + direction;
   if (next === 6) {
     if (progress.cleared.length < 4) {
+      playEffect("wrong");
       notify("옥상 문을 열려면 과학의 인장 4개가 필요해요. " + progress.cleared.length + "/4");
       return;
     }
     enterBattle(4, stair.side === "center" ? 190 : stairX("roof", stair.side));
   } else if (next === 0) {
-    if (stair.side !== "center") go("gate", 0, stairX("gate", stair.side));
-    else notify("교문으로 가려면 중앙 현관이나 양끝 계단을 이용하세요.");
+    if (stair.side !== "center") {
+      playEffect("stairs");
+      go("gate", 0, stairX("gate", stair.side));
+    } else notify("교문으로 가려면 중앙 현관이나 양끝 계단을 이용하세요.");
   } else {
+    playEffect("stairs");
     go("floor", next, stair.x);
   }
 }
@@ -798,8 +785,8 @@ function interact() {
     );
     return;
   }
-  tone(470);
   if (scene.type === "gate") {
+    playEffect(o.type === "stair" ? "stairs" : "door");
     const firstEntry = !progress.intro;
     progress.intro = true;
     go("floor", 1, o.type === "stair" ? stairX("floor", o.side) : 580);
@@ -819,26 +806,32 @@ function interact() {
     return;
   }
   if (o.type === "scholar") {
+    playEffect("talk");
     quiz(o.id);
     return;
   }
   if (o.room) {
+    playEffect("door");
     go("classroom", scene.floor, sideStairs.classroom[0].x, -1, o.room);
     return;
   }
   if (o.type === "board") {
+    playEffect("page");
     bubble(classroomNotes[scene.floor - 3][scene.room - 1]);
     return;
   }
   if (o.name.endsWith("학실") || o.name === "물리지학실") {
+    playEffect("select");
     labChoice(o.name);
     return;
   }
   if (o.name === "중앙 현관") {
+    playEffect("door");
     go("gate", 0, 640);
     return;
   }
   if (o.name === "매점") {
+    playEffect("recovery");
     hp = 100;
     mp = 60;
     combatEvent("heal", player.x, player.y, .55);
@@ -933,6 +926,7 @@ function setScene() {
     leapTime: 0,
     celebrate: 0,
     recover: 0,
+    stepDistance: 0,
   });
   cam = cameraTarget();
   shots = [];
@@ -974,12 +968,13 @@ function enterBattle(i,entryX=190) {
       : !hasKey(i) || progress.cleared.includes(i)
   )
     return;
+  playEffect("door");
   go(i === 4 ? "roof" : "arena", i === 4 ? 6 : 1, entryX, i);
   if (i === 4 && progress.won) return;
   dialogue("요룡이", "hero", subjects[i].intro, "전투 시작");
 }
 function winBoss(i) {
-  tone(980, 0.4);
+  playEffect("bossVictory");
   hp = 100;
   mp = 60;
   shots = [];
@@ -1032,6 +1027,7 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
   texts.push({ x: e.x, y: chest - (e.boss ? 33 : 14), n, life: 0.68 });
   spark(e.x, chest - 8, "#ffe39b", 8);
   if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.id === skill && fx.max - fx.life < .065)) {
+    playEffect("hit", skill >= 0 ? .82 : 1);
     combatEvent("impact", e.x, chest, .36, { id: skill, dir, target: e });
     if (!reducedMotion.matches) contactPause = Math.max(contactPause, e.hp === 0 && e.boss ? .05 : 1 / 60);
   }
@@ -1039,7 +1035,7 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
   if (wasAboveHalf && e.hp > 0 && bossPhase(e) === 2) {
     combatEvent("bossPhaseShift", e.x, e.y, .8, { kind: e.kind, height: e.height });
     if (!reducedMotion.matches) shake = Math.max(shake, 8);
-    tone(105, .32, "triangle");
+    playEffect("phase");
   }
   if (e.hp <= 0) {
     e.dying = 0.7;
@@ -1054,7 +1050,7 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
       player.inv = 0.75;
     } else {
       mp = Math.min(60, mp + 7);
-      tone(610);
+      playEffect("defeat");
     }
   }
 }
@@ -1064,7 +1060,7 @@ function hurt(n) {
   player.inv = 0.95;
   player.hurtTime = 0.26;
   shake = 4;
-  tone(110, 0.18, "triangle");
+  playEffect("hurt");
   spark(player.x, player.y - 25, "#ffac9b", 9);
   combatEvent("hurt", player.x, player.y - 24, .3);
   if (!hp) {
@@ -1107,7 +1103,7 @@ function attack() {
   player.attackCD = 0.34;
   player.swing = 0.2;
   combatEvent("slash", player.x, player.y - 29, .24, { dir: player.face });
-  tone(260, 0.075, "triangle");
+  playEffect("slash");
   for (const e of [...foes])
     if (
       (e.x - player.x) * player.face >= -19 - (e.boss ? e.half : 0) &&
@@ -1150,7 +1146,7 @@ function cast(slot) {
     max: 0.7,
     life: 0.7,
   });
-  tone(420 + id * 51, 0.23, "triangle");
+  playEffect(skillSounds[id]);
   const dmg = scholars[id][9];
   if ([0, 2].includes(id)) {
     shots.push({
@@ -1207,6 +1203,7 @@ function cast(slot) {
   }
   if (id === 2) {
     hp = Math.min(100, hp + 10);
+    playEffect("recovery", .65);
     combatEvent("heal", x, player.y, .55);
   }
   statusBars();
@@ -1239,6 +1236,7 @@ function step(dt) {
   mp = Math.min(60, mp + dt * 2.5);
   let axis = Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
   if (axis && p.dash <= 0) p.face = axis;
+  const oldX = p.x;
   p.vx = p.dash > 0 ? p.face * 420 : axis * 158;
   p.x = clamp(p.x + p.vx * dt, 17, worldWidth - 17);
   p.coyote = p.grounded ? 0.09 : Math.max(0, p.coyote - dt);
@@ -1255,7 +1253,7 @@ function step(dt) {
     p.buffer = 0;
     spark(p.x, p.y, "#d5f5ff", 5);
     combatEvent(p.jumps === 2 ? "doubleJump" : "jump", p.x, p.y, .36);
-    tone(p.jumps === 1 ? 520 : 710, 0.07);
+    playEffect(p.jumps === 1 ? "jump" : "doubleJump");
   }
   const oldY = p.y,
     wasGrounded = p.grounded;
@@ -1272,12 +1270,20 @@ function step(dt) {
     if (!wasGrounded && p.vy > 70) {
       p.landTime = 0.09;
       combatEvent("land", p.x, landing ? landing.y : GROUND, .29);
+      playEffect(footstepSound(!!landing), 1.55);
     }
     p.y = landing ? landing.y : GROUND;
     p.vy = 0;
     p.jumps = 0;
     p.grounded = true;
   }
+  if (axis && p.grounded && wasGrounded && p.dash <= 0) {
+    p.stepDistance += Math.abs(p.x - oldX);
+    if (p.stepDistance >= 34) {
+      p.stepDistance -= 34;
+      playEffect(footstepSound(p.y < GROUND));
+    }
+  } else if (!p.grounded) p.stepDistance = 0;
   if (keys.has("KeyA")) attack();
   if (modal) return;
   cam +=
@@ -1352,6 +1358,7 @@ function step(dt) {
         if (contact) hurt(s.dmg);
         s.life = 0;
         combatEvent("enemyImpact", s.x, Math.min(GROUND - 3, s.y), .47, { id: s.id, rift: s.rift, dir: Math.sign(s.vx) || 1 });
+        playEffect(s.rift ? "impactRoof" : bossImpactSounds[s.id], .74);
       }
     } else if (s.area) {
       if (s.y >= GROUND - 25) {
@@ -1428,7 +1435,7 @@ function press(code, repeat = false) {
       player.inv = 0.25;
       player.dashCD = 0.75;
       spark(player.x, player.y - 7, "#abd9ec", 7);
-      tone(310, 0.09);
+      playEffect("dash");
     }
   }
   if (code === "KeyA") attack();

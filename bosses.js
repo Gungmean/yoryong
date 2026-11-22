@@ -80,6 +80,7 @@ function launchBossBolts(e, dt) {
     const { id, dir } = pending;
     const aim = reverse ? -dir : dir;
     const speed = [230, 205, 212, 220][id];
+    playEffect(bossBoltSounds[id]);
     shots.push({
       team: 1, rift: e.kind === 4, id, x: e.x + aim * bossStats[e.kind].half * .72,
       y: GROUND - height, vx: aim * speed, vy: 0, rx: 24, ry: 15, scale: 1.24,
@@ -101,9 +102,11 @@ function releaseBossMove(e) {
       timer: -zone.delay, hit: false, struck: false,
     });
   }
-  if (move.dash) e.rush = { start, end, elapsed: 0, duration: .65, hit: false, id: move.id };
+  if (move.dash) {
+    e.rush = { start, end, elapsed: 0, duration: .65, hit: false, id: move.id };
+    playEffect("bossRush");
+  }
   if (!reducedMotion.matches) shake = Math.max(shake, e.kind === 4 ? 6 : 4);
-  tone(140, .14, "triangle");
 }
 
 function stepBoss(e, dt) {
@@ -139,6 +142,7 @@ function stepBoss(e, dt) {
     e.plan = planBossMove(e);
     e.dir = e.plan.dir;
     e.warn = e.plan.move.lead;
+    playEffect(e.kind === 4 ? "bossWarningRoof" : "bossWarning");
   }
 }
 
@@ -150,6 +154,8 @@ function stepBossZones(dt) {
     if (zone.timer < 0) continue;
     if (!zone.struck) {
       zone.struck = true;
+      const strength = clamp(1.12 - Math.abs(zone.x - player.x) / 570, .38, 1);
+      playEffect(zone.rift ? "impactRoof" : bossImpactSounds[zone.id], strength);
       if (!reducedMotion.matches) shake = Math.max(shake, zone.rift ? 7 : 5);
     }
     if (!zone.hit && !player.inv && Math.abs(player.x - zone.x) < zone.radius && player.y > GROUND - zone.height) {

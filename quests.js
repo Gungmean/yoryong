@@ -129,6 +129,7 @@ function advanceQuestNotice(dt) {
     $("qn-detail").textContent = next.story;
     $("qn-place").textContent = next.place;
     $("qn-portrait").src = "assets/" + next.art + ".png";
+    playEffect(completed ? "questComplete" : "questNew");
   }
   if (!shownNotice) return;
   notice.hidden = false;

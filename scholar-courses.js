@@ -45,7 +45,22 @@ const scholarCourses = [
 ];
 const courseSign = {x:118, name:"실험 안내", type:"courseHint"};
 const massWindow = 2.35;
-let courseRun = null, savedCourse = null;
+let courseRun = null;
+
+function normalizeCourseRecord(id, record) {
+  let stage = Number.isInteger(record.stage) ? clamp(record.stage,0,scholarCourses[id].stages) : 0;
+  const settings = [0,1].map(i => [0,1,2].includes(record.settings?.[i]) ? record.settings[i] : 0);
+  if (id === 1 || id === 6) stage = Number(settings[0] === (id === 1 ? 1 : 2) && settings[1] === 2);
+  if (id === 2 && stage === 1) stage = 0;
+  return {stage,settings};
+}
+
+function restoreCourseRecords(records, legacy) {
+  for (const id of scholarCourses.keys()) {
+    const record = records?.[id] ?? (legacy?.id === id ? legacy : null);
+    if (record && typeof record === "object") progress.courseStates[id] = normalizeCourseRecord(id,record);
+  }
+}
 
 function beginCourse() {
   const id = scene.type === "classroom"
@@ -53,15 +68,13 @@ function beginCourse() {
   courseRun = null;
   if (id >= 0) {
     const definition = scholarCourses[id];
-    const record = savedCourse?.id === id ? savedCourse : null;
+    const record = progress.courseStates[id];
     const known = progress.learned.includes(id);
-    const stage = known ? definition.stages : clamp(Number.isInteger(record?.stage) ? record.stage : 0, 0, definition.stages);
-    const settings = [0,1].map(i => {
-      if (known) return id === 1 && i === 0 ? 1 : 2;
-      return [0,1,2].includes(record?.settings?.[i]) ? record.settings[i] : 0;
-    });
+    const stage = known ? definition.stages : (record?.stage ?? 0);
+    const settings = known && (id === 1 || id === 6)
+      ? [id === 1 ? 1 : 2, 2] : (record?.settings.slice() ?? [0,0]);
     courseRun = {
-      id, definition, stage: id === 2 && stage === 1 ? 0 : stage, settings, displaySettings:[...settings],
+      id, definition, stage, settings, displaySettings:[...settings],
       time: 0, changedAt: -5, deadline: 0, support: null, pulse: null,
       platforms: definition.steps.map(([x,y,w,kind],index) =>
         ({x,y,w,kind,index,homeY:y,oldY:y,active:true})),
@@ -70,7 +83,6 @@ function beginCourse() {
     };
     advanceCourse(0);
   }
-  savedCourse = null;
 }
 
 function courseSolved() {
@@ -103,6 +115,7 @@ function courseObjective() {
 
 function courseChanged(message) {
   courseRun.changedAt = courseRun.time;
+  progress.courseStates[courseRun.id] = normalizeCourseRecord(courseRun.id,courseRecord());
   if (message) notify(message);
   playEffect(courseSolved() ? "correct" : "select");
   syncQuest();

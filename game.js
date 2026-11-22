@@ -30,7 +30,7 @@ let player = {
   buffer: 0,
 };
 function newProgress() {
-  return { learned: [], cleared: [], slots: [null, null, null, null], won: false, intro: false, practice: 0 };
+  return { learned: [], cleared: [], slots: [null, null, null, null], won: false, intro: false, practice: 0, courseStates: {} };
 }
 const coarseInput = matchMedia("(pointer: coarse)");
 let panelBack = null, attackPointer = null;
@@ -234,7 +234,6 @@ function save() {
         x: player.x,
         hp,
         mp,
-        course: courseRecord(),
         sound,
         musicEnabled,
         musicVolume,
@@ -277,6 +276,7 @@ function load() {
     );
     progress.intro = !!d.progress.intro || progress.learned.length > 0;
     progress.won = d.progress.won && progress.cleared.length === 4;
+    restoreCourseRecords(d.progress.courseStates, d.course);
     const s = d.scene || {};
     if (
       s.type === "floor" &&
@@ -287,7 +287,6 @@ function load() {
       scene = { type: "floor", floor: s.floor, subject: -1 };
     if (s.type === "classroom" && classroomDoor(s.floor, s.room)) {
       scene = { type: "classroom", floor: s.floor, room: s.room, subject: -1 };
-      savedCourse = d.course;
     }
     if (
       s.type === "arena" &&
@@ -870,11 +869,11 @@ function travelStair(stair, direction) {
   }
 }
 function findNear() {
-  return objects()
-    .filter(o => o.y !== undefined
-      ? player.grounded && Math.abs(player.y - o.y) < 8 && Math.abs(o.x - player.x) < (o.type === "scholar" ? 48 : 35)
-      : Math.abs(o.x - player.x) < 58 && player.y > GROUND - 65)
-    .sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))[0];
+  const nearby = objects().filter(o => o.y !== undefined
+    ? player.grounded && Math.abs(player.y - o.y) < 8 && Math.abs(o.x - player.x) < (o.type === "scholar" ? 48 : 35)
+    : Math.abs(o.x - player.x) < 58 && player.y > GROUND - 65);
+  return nearby.find(o => o.type === "scholar") ||
+    nearby.sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))[0];
 }
 function interact() {
   if (foes.some((e) => e.boss && e.dying)) return;

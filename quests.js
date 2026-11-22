@@ -44,15 +44,15 @@ const floorLabel = f => f === 6 ? "옥상" : f === 0 ? "교문" : f + "층";
 function buildQuestRoute(q) {
   if (q === epilogue) return [];
   const points = objects();
-  const passage = (point, cue, onward = 0) => ({point, cue, onward});
+  const passage = (point, cue, short) => ({point, cue, short, onward: 0});
   const stairs = points.filter(p => p.type === "stair");
   if (scene.type === "gate")
-    return [passage(points.find(p => p.type === "entrance"), "중앙 현관 앞에서 ↑를 눌러 본관에 들어가세요.")];
+    return [passage(points.find(p => p.type === "entrance"), "중앙 현관 앞에서 ↑를 눌러 본관에 들어가세요.", "중앙 현관 · ↑ 입장")];
   if (scene.type === "classroom")
-    return stairs.map(p => passage(p, p.name + "에서 ↑를 눌러 " + scene.floor + "층 복도로 나가세요."));
+    return stairs.map(p => passage(p, p.name + "에서 ↑를 눌러 " + scene.floor + "층 복도로 나가세요.", p.name + " · ↑ 나가기"));
   if (scene.type === "arena" || scene.type === "roof") {
     const boss = foes.find(e => e.boss);
-    return boss ? [passage(boss, subjects[boss.kind].boss + " 격파 · A 기본 공격 / QWER 스킬")] : [];
+    return boss ? [passage(boss, "공격 예고에 맞춰 회피하세요.", "공격 예고가 보이면 회피")] : [];
   }
   const destination = q.kind === "trial"
     ? scholarPoint(q.id)
@@ -61,17 +61,18 @@ function buildQuestRoute(q) {
     const direction = Math.sign(q.floor - scene.floor);
     const next = scene.floor + direction;
     const key = direction > 0 ? "↑" : "↓";
-    const movement = direction > 0 ? "올라가세요." : "내려가세요.";
     return stairs.map(point => ({
       point, direction, next,
-      cue: point.name + "에서 " + key + "를 눌러 " + floorLabel(next) + "으로 " + movement,
+      short: point.name + " · " + key + " " + floorLabel(next),
+      cue: point.name + " · " + key + " " + floorLabel(next) +
+        (next === q.floor ? "" : " · 최종 " + floorLabel(q.floor)),
       onward: destination ? Math.abs(point.x - destination.x) : 0,
     }));
   }
   if (q.kind === "trial")
-    return [passage(destination, destination.name + " 곁에서 ↑를 눌러 시련에 도전하세요.")];
+    return [passage(destination, destination.name + " 곁에서 ↑를 눌러 시련에 도전하세요.", destination.name + " · ↑ 대화")];
   if (destination)
-    return [passage(destination, destination.name + "에서 ↑를 누르고 " + subjects[q.id].room + "을 선택하세요.")];
+    return [passage(destination, destination.name + "에서 ↑를 누르고 " + subjects[q.id].room + "을 선택하세요.", destination.name + " · ↑ 입장")];
   return [];
 }
 
@@ -108,7 +109,7 @@ function announceQuest(completed = null) {
     if (questNotices.length && !questNotices[0].completed) questNotices.shift();
     $("quest-notice").hidden = true;
   }
-  questNotices.push({ completed, next: currentQuest(), remaining: completed ? 6 : 5 });
+  questNotices.push({ completed, next: currentQuest(), remaining: completed ? 3.4 : 3 });
 }
 function resetQuestNotices() {
   questNotices.length = 0;
@@ -126,12 +127,12 @@ function advanceQuestNotice(dt) {
     $("qn-finished").textContent = completed?.title || "";
     $("qn-caption").textContent = completed ? (next === epilogue ? "모험 완료 · 자유 탐험" : "다음 퀘스트") : next.chapter;
     $("qn-title").textContent = next.title;
-    $("qn-detail").textContent = next.story;
-    $("qn-place").textContent = next.place;
-    $("qn-portrait").src = "assets/" + next.art + ".png";
+    $("qn-portrait").src = portraitPath(next.art);
     playEffect(completed ? "questComplete" : "questNew");
   }
   if (!shownNotice) return;
+  const action = shownNotice.next === trackedQuest && activeLeg ? activeLeg.short : shownNotice.next.place;
+  if ($("qn-place").textContent !== action) $("qn-place").textContent = action;
   notice.hidden = false;
   shownNotice.remaining -= dt;
   if (shownNotice.remaining <= 0) { notice.hidden = true; shownNotice = null; }

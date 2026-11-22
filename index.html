@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
-    <link rel="stylesheet" href="style.css?v=boss-top">
+    <link rel="stylesheet" href="style.css?v=polish">
   </head>
   <body>
     <main id="shell">
@@ -29,8 +29,7 @@
               <img id="qn-portrait" src="assets/hero.png" alt="">
               <div><small id="qn-caption"></small><strong id="qn-title"></strong></div>
             </div>
-            <p id="qn-detail"></p>
-            <p class="notice-destination"><span>목적지</span> <b id="qn-place"></b></p>
+            <p class="notice-destination" id="qn-place"></p>
           </div>
         </div>
         <div class="hud-top">
@@ -49,11 +48,12 @@
           <p id="boss-warning" aria-live="polite"></p>
           <nav class="field-tools" aria-label="모험 정보">
             <button id="quest" aria-haspopup="dialog" aria-keyshortcuts="J" aria-describedby="qaction"><span class="quest-heading"><i data-icon="quest"></i><small id="qchapter"></small><kbd>J</kbd></span>
-              <strong id="qtitle"></strong><span id="qaction"></span></button>
+              <strong id="qtitle"></strong><span id="qaction"></span><span id="qshortcut">모험 일지</span></button>
             <button id="menu" aria-label="모험 메뉴" data-tip="모험 메뉴 (Esc)"><i data-icon="globe"></i><span>메뉴</span></button>
           </nav>
         </div>
         <div id="toast" role="status"></div>
+        <aside id="practice" aria-label="조작 연습" hidden><span id="practice-task" role="status"></span><button id="practice-skip">건너뛰기</button></aside>
       </section>
       <section class="dock" aria-label="캐릭터 상태와 조작">
         <div class="player" role="group" aria-label="요룡이 상태">
@@ -64,7 +64,7 @@
             <div class="statline"><b>MP</b><span class="track mp"><i id="mpbar"></i></span><small id="mpval"></small></div>
           </div>
         </div>
-        <button id="controls" class="controls">조작 안내 <kbd>←</kbd><kbd>→</kbd> 이동 <kbd>↑</kbd> 상호작용</button>
+        <button id="controls" class="controls">조작 안내 <span><kbd>←</kbd><kbd>→</kbd> 이동 <kbd>↑</kbd> 상호작용</span></button>
         <div class="quickbar" role="group" aria-label="전투 퀵슬롯">
           <button class="edit" id="loadout" aria-label="스킬 배치 (K)" data-tip="스킬 배치 (K)"><i data-icon="slots"></i></button>
           <div id="slots"></div>
@@ -80,24 +80,25 @@
     </main>
     <audio id="campus-music" preload="none" loop></audio>
     <audio id="battle-music" preload="none" loop></audio>
-    <script src="data.js?v=giants"></script>
+    <script src="data.js?v=polish"></script>
     <script src="assets/world/classrooms.js"></script>
     <script src="icons.js"></script>
     <script src="actor-sheets.js"></script>
     <script src="assets/combat/pixelfx.js"></script>
     <script src="assets/combat/victory-fx.js"></script>
     <script src="assets/audio/sfx/bank.js?v=scholar-sounds"></script>
-    <script src="sound-effects.js?v=scholar-sounds"></script>
-    <script src="quests.js?v=recorded"></script>
+    <script src="sound-effects.js?v=polish"></script>
+    <script src="quests.js?v=polish"></script>
     <script src="bosses.js?v=recorded"></script>
-    <script src="victory.js?v=victory1"></script>
-    <script src="game.js?v=victory1"></script>
+    <script src="victory.js?v=polish"></script>
+    <script src="game.js?v=polish"></script>
     <script src="assets/world/atlas.js"></script>
+    <script src="assets/world/school-rooms.js"></script>
     <script src="assets/world/fixtures.js"></script>
-    <script src="scenery.js?v=campus2"></script>
+    <script src="scenery.js?v=polish"></script>
     <script src="vendor/three-r187.min.js"></script>
-    <script src="map3d.js?v=giants"></script>
-    <script src="combat-fx.js?v=victory1"></script>
-    <script src="render.js?v=victory1"></script>
+    <script src="map3d.js?v=polish"></script>
+    <script src="combat-fx.js?v=polish"></script>
+    <script src="render.js?v=polish"></script>
   </body>
 </html>

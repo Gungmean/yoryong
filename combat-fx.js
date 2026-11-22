@@ -435,7 +435,7 @@ function drawCombatGround() {
       g.restore();
     }
     if (e.type === "summon") {
-      const glow = Math.min(1, e.life * 3),
+      const glow = (1 - t) ** 1.8 * (quietCombat() ? .44 : .96),
         feet = y - 10 * t,
         c = spellLight[e.id];
       spellClip(disciplineSeals[e.id >> 1], t, x, feet, .64 + .28 * Math.min(1, t * 4), glow);
@@ -445,7 +445,7 @@ function drawCombatGround() {
       fxArc(x, feet - 2, 20 + 9 * t, 4, "#fff1c5", Math.PI, Math.PI * 2);
       drawActor("scholar" + e.id, 4 + Math.min(3, Math.floor(t * 4)), x, feet, 74, e.flip);
       g.restore();
-      if (t < .74) {
+      if (!quietCombat() && t < .74) {
         const pulse = Math.sin(t / .74 * Math.PI), dir = e.flip ? -1 : 1;
         combatSprite(e.id, Math.floor(t * 10), x + dir * (20 + 9 * t), feet - 27,
           .26 + .12 * pulse, e.flip, pulse * .92);

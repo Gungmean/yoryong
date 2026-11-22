@@ -3,8 +3,11 @@
 const schoolPaint = new Image(), furniturePaint = new Image();
 schoolPaint.src = campusAtlas.data;
 furniturePaint.src = fixtureAtlas.data;
+const roomsPaint = new Image();
+roomsPaint.src = schoolRoomAtlas.data;
+const hallArt = () => scene.floor >= 3 ? "hall" + scene.floor : "corridor";
+const roomRegion = name => schoolRoomAtlas.regions[name];
 const labPaint = ["physics", "chem", "bio", "earth"];
-const labFloorCuts = [[.75,.892],[.75,.89],[.77,.891],[.73,.851]];
 const panoramaWidth = rate => Math.max(680, W + Math.max(0, worldWidth - W) * rate + 12);
 function furnishingTheme() {
   if (scene.type === "roof") return progress.won ? "roof-day" : "roof-night";
@@ -15,10 +18,10 @@ const roomLight = {
   gate: ["#fff3d5","#c8e3ff","#937654","#fff9e6", 1],
   hall: ["#ffe2ae","#fce9ce","#94644b","#ffd490", 1],
   classroom: ["#ffe7b8","#fff1ce","#96745e","#ffda90", 1],
-  physics: ["#b9e8ff","#d2dcff","#60537c","#ffc78b", -1],
-  chem: ["#ffd3b9","#e3c6fa","#755080","#e898e9", 1],
-  bio: ["#fff2a4","#e0f0cb","#647553","#ffe2a3", 1],
-  earth: ["#ffe0a6","#c3d7fc","#635a78","#a6d5fc", -1],
+  physics: ["#fff0ca","#d2edee","#86745e","#ecd9a5", 1],
+  chem: ["#fff0cc","#d9e7da","#86745e","#e7d5ae", 1],
+  bio: ["#fff0c0","#e2edce","#81755d","#eed9a2", 1],
+  earth: ["#fff1c8","#eae0cc","#84725a","#eed6a5", 1],
   "roof-night": ["#ffc29a","#ddd1ff","#66527f","#ea9cf1", -1],
   "roof-day": ["#ffe2a5","#ffdcd3","#967688","#ffe1a0", -1],
 };
@@ -33,8 +36,7 @@ function exhibitStations() {
     return [477,1730].map(x=>({x, feet:282, w:54, h:21, scale:.64, subject:scene.floor-2}));
   }
   if (scene.type === "arena") return [
-    {x:229, feet:278, w:66, h:25, scale:.83, subject:scene.subject},
-    {x:711, feet:274, w:55, h:22, scale:.65, subject:scene.subject},
+    {x:228, feet:222, w:66, h:0, scale:.78, subject:scene.subject, onBench:true},
   ];
   return [];
 }
@@ -50,17 +52,17 @@ function mapFixtures() {
       items.push({key, x:stair.x, feet:GROUND, w, h:Math.round(w*sh/sw), flip:stair.side==="east"});
     }
   }
-  for (const station of exhibitStations()) items.push({...station, key:theme});
+  for (const station of exhibitStations()) items.push({...station, key:station.onBench ? null : theme});
   for (const b of platforms()) {
     if (scene.type === "classroom") {
       items.push({x:b.x, feet:GROUND, w:b.w, h:0});
       continue;
     }
-    const bench = scene.type === "floor";
+    const bench = scene.type === "floor" || scene.type === "arena";
     // The seat is 58% down the bench sprite; cabinet tops accept feet 8% down.
     const seat = bench ? .58 : .08;
     const h = Math.round((GROUND-b.y)/(1-seat));
-    items.push({key:bench?"bench":theme, x:b.x, feet:GROUND, w:b.w, h});
+    items.push({key:bench ? "bench" : theme, x:b.x, feet:GROUND, w:b.w, h});
   }
   return items;
 }
@@ -91,7 +93,7 @@ function hallwaySections() {
   for (let i=0;i<bays.length;i++) {
     const b=bays[i], l=i ? hallBoundary(bays[i-1],b) : 0;
     const r=i+1<bays.length ? hallBoundary(b,bays[i+1]) : worldWidth;
-    const add=(x,end,u,v,asset="corridor",door=null)=>{
+    const add=(x,end,u,v,asset=hallArt(),door=null)=>{
       if (end>x) result.push({x,w:end-x,u,v,asset,door});
     };
     if (b.type==="stair") {
@@ -110,14 +112,17 @@ function hallwaySections() {
     }
     add(left,b.x-span,0,.183);
     add(b.x+span,right,.297,.5);
-    const inside = b.name==="물리지학실" ? "physics" : b.name==="생명화학실" ? "chem" : "classroom";
-    const [,,iw,ih]=campusAtlas.regions[inside];
-    const door={x:b.x,inside,view:(span*2+4)*ih*.79/(132*iw)};
-    if (b.room) {
+    const inside = b.name==="물리지학실" ? "physics" : b.name==="생명화학실" ? "chem"
+      : b.name==="중앙 현관" ? "entrance-view" : null;
+    let door = null;
+    if (inside) {
+      const [,,iw,ih]=roomRegion(inside);
+      door={x:b.x,inside,view:(span*2+4)*ih*.79/(132*iw)};
+    } else if (b.room) {
       const sw=Math.round((span*2+4)*231/132);
-      door.classroom=[b.room%2 ? 164 : 716,(scene.floor-3)*H+72,sw,231];
+      door={x:b.x,classroom:[b.room%2 ? 164 : 716,(scene.floor-3)*H+72,sw,231]};
     }
-    add(b.x-span,b.x+span,.183,.297,"corridor",door);
+    add(b.x-span,b.x+span,.183,.297,hallArt(),door);
   }
   hallSections.set(scene.floor,result);
   return result;
@@ -145,10 +150,11 @@ function hallFloorPainting() {
     if (width<1) continue;
     pane.width=width; pane.height=floor.height;
     const ink=pane.getContext("2d"); ink.imageSmoothingEnabled=false;
-    const [rx,ry,rw,rh]=campusAtlas.regions[asset];
+    const region=roomRegion(asset);
+    const [rx,ry,rw,rh]=region || campusAtlas.regions[asset];
     ink.save();
     if (v<u) { ink.translate(width,0); ink.scale(-1,1); }
-    ink.drawImage(schoolPaint,rx+Math.min(u,v)*rw,ry+top*rh,Math.abs(u-v)*rw,rh*(1-top),0,0,width,floor.height);
+    ink.drawImage(region ? roomsPaint : schoolPaint,rx+Math.min(u,v)*rw,ry+top*rh,Math.abs(u-v)*rw,rh*(1-top),0,0,width,floor.height);
     ink.restore();
     ink.globalCompositeOperation="destination-in";
     const edge=Math.min(.45,11/width), blend=ink.createLinearGradient(0,0,width,0);
@@ -241,6 +247,18 @@ function corridorExhibit(x, width, roomIndex, time) {
   // Mount each piece on the wall next to its door, within that room's tile.
   const side = roomIndex % 2 ? 1 : -1;
   const mount = x + side * Math.min(66, width * .27);
+  if (floor >= 3 && roomIndex % 2 === 0 && x + 62 > 0 && x + 62 < W + 35) {
+    const px = x + Math.min(65,width * .29), y = 221;
+    const ink = ["#517466","#556b89","#855e45"][floor-3];
+    r(px-23,y-2,47,29,"#674d37");
+    r(px-21,y,43,24,"#b69565");
+    r(px-19,y+2,39,9,ink);
+    word(["과학 신문","관찰 일지","탐구 기록"][floor-3],px,y+4,7,"#fff6d1");
+    for (let j=0;j<3;j++) {
+      r(px-16+j*12,y+13,9,8,j===1 ? "#e1c08d" : "#eae0bc");
+      r(px-14+j*12,y+16,4,1,ink);
+    }
+  }
   if (mount > -30 && mount < W + 30) {
     if (roomIndex % 3 === 0) {
       const y = 86;

@@ -12,7 +12,7 @@ const campusWorld = (() => {
     camera,
     stage,
     texture,
-    classroomTexture,
+    classroomTexture, roomsTexture,
     furnitureTexture, paintedFurniture, contactMat,
     paper,
     unavailable = false,
@@ -162,6 +162,7 @@ const campusWorld = (() => {
       lastKey = "";
       texture.needsUpdate = true;
       if (classroomTexture) classroomTexture.needsUpdate = true;
+      if (roomsTexture) roomsTexture.needsUpdate = true;
       if (furnitureTexture) furnitureTexture.needsUpdate = true;
     });
   }
@@ -298,6 +299,7 @@ const campusWorld = (() => {
   }
   function dressFloor() {
     for (const item of mapFixtures()) {
+      if (item.onBench) continue;
       const {key,x,feet,w,h,flip} = item, z=(feet-GROUND)/sin;
       if (key && fixtureAtlas.regions["reflection-"+key]) {
         const length=Math.min(15,h*.37);
@@ -641,34 +643,54 @@ const campusWorld = (() => {
     stage.add(boardsMesh);
     for (let x = -160; x < Math.max(worldWidth,W)+160; x+=158)
       art.wall("corridor",x,0,158,80,back,[0,0,.265,80/H],3);
+    const strip = (name, x, y, w, h, z, u, v) => {
+      if (roomRegion(name)) return roomPanel(name, x,y,w,h,z,u,y/H,v,(y+h)/H);
+      art.wall(name,x,y,w,h,z,[u,y/H,v,(y+h)/H],3);
+    };
     for (const {asset,x,w,u,v,door} of hallwaySections()) {
       if (!door) {
-        art.wall(asset,x,80,w,195,back,[u,80/H,v,275/H],3);
+        strip(asset,x,80,w,195,back,u,v);
         continue;
       }
-      art.wall(asset,x,80,w,64,back,[u,80/H,v,144/H],3);
+      strip(asset,x,80,w,64,back,u,v);
       if (door.classroom) {
         const [sx,sy,sw,sh]=door.classroom;
         classroomPanel({sx,sy,sw,sh,x:x-2,y:143,w:w+4,h:132,z:back-8});
-      } else art.wall(door.inside,x-2,143,w+4,132,back-8,[.48-door.view/2,.12,.48+door.view/2,.91],3);
-      const panel=new Surfaces();
-      panel.wall(asset,x,144,w,131,back-3,[u,144/H,v,275/H],3);
-      const slab=panel.finish();
-      moving.push(()=>{slab.position.x=doorTravel(door.x,w)});
+      } else roomPanel(door.inside,x-2,143,w+4,132,back-8,.48-door.view/2,.12,.48+door.view/2,.91);
+      let slab;
+      if (roomRegion(asset)) {
+        slab = roomPanel(asset,x,144,w,131,back-3,u,144/H,v,275/H);
+      } else {
+        const panel = new Surfaces();
+        panel.wall(asset,x,144,w,131,back-3,[u,144/H,v,275/H],3);
+        slab = panel.finish();
+      }
+      const rest = slab.position.x;
+      moving.push(()=>{slab.position.x=rest+doorTravel(door.x,w)});
     }
     art.finish();
     mountExhibits();
     particles3D("dust", 23, worldWidth);
   }
+  function sceneryTexture(image) {
+    const result = new T.Texture(image);
+    result.colorSpace = T.SRGBColorSpace;
+    result.magFilter = result.minFilter = T.NearestFilter;
+    result.generateMipmaps = false;
+    result.needsUpdate = true;
+    return result;
+  }
   function classroomPanel(p) {
-    const art = assets.classrooms;
-    if (!classroomTexture) {
-      classroomTexture = new T.Texture(art);
-      classroomTexture.colorSpace = T.SRGBColorSpace;
-      classroomTexture.magFilter = classroomTexture.minFilter = T.NearestFilter;
-      classroomTexture.generateMipmaps = false;
-      classroomTexture.needsUpdate = true;
-    }
+    classroomTexture ||= sceneryTexture(assets.classrooms);
+    return imagePanel(p, classroomTexture);
+  }
+  function roomPanel(name,x,y,w,h,z,u=0,t=0,v=1,b=1) {
+    roomsTexture ||= sceneryTexture(roomsPaint);
+    const [left,top,aw,ah] = roomRegion(name);
+    return imagePanel({x,y,w,h,z,sx:left+u*aw,sy:top+t*ah,sw:(v-u)*aw,sh:(b-t)*ah}, roomsTexture);
+  }
+  function imagePanel(p, map) {
+    const art = map.image;
     const plane = new T.PlaneGeometry(p.w, p.h / cos);
     const uv = plane.getAttribute("uv");
     for (let i = 0; i < uv.count; i++) {
@@ -676,10 +698,11 @@ const campusWorld = (() => {
       const v = 1 - (p.sy + .5 + (1 - uv.getY(i)) * (p.sh - 1)) / art.height;
       uv.setXY(i, u, v);
     }
-    const mat = new T.MeshBasicMaterial({map: classroomTexture, alphaTest: p.z === 0 ? .35 : 0, toneMapped: false});
+    const mat = new T.MeshBasicMaterial({map, alphaTest: p.z === 0 ? .35 : 0, toneMapped: false});
     const planeMesh = new T.Mesh(plane, mat);
     planeMesh.position.set(p.x + p.w / 2, worldY(p.y + p.h / 2, p.z), p.z);
     stage.add(planeMesh);
+    return planeMesh;
   }
   function classroom() {
     for (const p of classroomPanels()) classroomPanel(p);
@@ -702,17 +725,9 @@ const campusWorld = (() => {
   }
   function laboratory() {
     const name = labPaint[scene.subject];
-    panoramic(name, 0.51, -12, 343, -270, 6);
-    const tiles = new Surfaces();
-    tiles.panoramaFloor(
-      name,
-      -12,
-      343,
-      ...labFloorCuts[scene.subject],
-    );
-    tiles.finish();
+    roomPanel(name,0,0,worldWidth,H,-220);
     mountExhibits();
-    particles3D(["sparks", "bubbles", "pollen", "stars"][scene.subject], 35, worldWidth);
+    particles3D("dust", 12, worldWidth);
   }
   function rooftop() {
     const sky = progress.won ? "morning" : "roof",
@@ -805,6 +820,11 @@ const campusWorld = (() => {
   }
   function draw(shakeX) {
     if (unavailable || lost || !image.naturalWidth || !furniturePaint.naturalWidth) return false;
+    if ((scene.type === "arena" || scene.type === "floor") && !roomsPaint.naturalWidth) {
+      canvas.hidden = true;
+      lastKey = "";
+      return false;
+    }
     if ((scene.type === "classroom" || (scene.type === "floor" && scene.floor >= 3)) && !assets.classrooms.naturalWidth) {
       canvas.hidden = true;
       lastKey = "";

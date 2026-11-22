@@ -35,6 +35,9 @@ const queuedEffects = new Map();
 const decodedEffects = new Map();
 const activeEffects = new Set();
 let effectsContext, effectsBus, decodingEffects, effectsReady = false;
+function syncEffectsVolume() {
+  if (effectsBus) effectsBus.gain.value = effectsVolume;
+}
 
 function unlockEffects() {
   if (!sound || document.hidden) return;
@@ -45,6 +48,7 @@ function unlockEffects() {
     try { effectsContext = new AudioEngine(); }
     catch { return; }
     effectsBus = effectsContext.createGain();
+    syncEffectsVolume();
     const limiter = effectsContext.createDynamicsCompressor();
     limiter.threshold.value = -12;
     limiter.ratio.value = 5;

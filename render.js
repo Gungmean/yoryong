@@ -224,12 +224,13 @@ function backdrop(name, w, h, offset, dressTile) {
 }
 // Draw a matching slice of the scenery atlas when WebGL is unavailable.
 function paintedSlice(name,x,y,w,h,u=0,t=0,v=1,b=1) {
-  if (!schoolPaint.naturalWidth || x+w<0 || x>W) return;
-  const [sx,sy,sw,sh]=campusAtlas.regions[name], left=Math.round(x), right=Math.round(x+w);
+  const region = roomRegion(name), image = region ? roomsPaint : schoolPaint;
+  if (!image.naturalWidth || x+w<0 || x>W) return;
+  const [sx,sy,sw,sh]=region || campusAtlas.regions[name], left=Math.round(x), right=Math.round(x+w);
   g.save();
   g.translate(u>v ? right : left,Math.round(y));
   if (u>v) g.scale(-1,1);
-  g.drawImage(schoolPaint,sx+Math.min(u,v)*sw,sy+t*sh,Math.abs(v-u)*sw,(b-t)*sh,
+  g.drawImage(image,sx+Math.min(u,v)*sw,sy+t*sh,Math.abs(v-u)*sw,(b-t)*sh,
     0,0,right-left,Math.round(y+h)-Math.round(y));
   g.restore();
 }
@@ -294,7 +295,7 @@ function hallPlaque(bay, x) {
   word(title, x, 97, 9, "#faf0d8");
 }
 function hallBackdrop() {
-  if (!schoolPaint.naturalWidth) {
+  if (!schoolPaint.naturalWidth || !roomsPaint.naturalWidth || (scene.floor >= 3 && !assets.classrooms.naturalWidth)) {
     backdrop("corridor",540,H,cam,()=>{});
     return;
   }
@@ -384,13 +385,18 @@ function classroomInterior(depth) {
 }
 
 function battleBack() {
-  const roof = scene.type === "roof";
-  const name=roof ? (progress.won?"morning":"roof") : labPaint[scene.subject];
-  const rate=roof ? .38 : .51, width=panoramaWidth(rate), top=roof?-5:-12, bottom=roof?352:343;
+  if (scene.type === "arena") {
+    r(0,0,W,H,"#655a50");
+    paintedSlice(labPaint[scene.subject],-cam,0,worldWidth,H);
+    drawFixtures2D();
+    return;
+  }
+  const name=progress.won ? "morning" : "roof";
+  const rate=.38, width=panoramaWidth(rate), top=-5, bottom=352;
   const left=-6-cam*rate;
   if (schoolPaint.naturalWidth) {
     paintedSlice(name,left,top,width,bottom-top);
-    const [start,end]=roof?[.785,.885]:labFloorCuts[scene.subject];
+    const [start,end]=[.785,.885];
     const back=top+(bottom-top)*start;
     for (let y=back;y<H;y+=4) {
       const strip=Math.min(4,H-y), t=(y-back)/(H+2-back), u=(y+strip-back)/(H+2-back);
@@ -400,8 +406,8 @@ function battleBack() {
       if (offset>0) paintedSlice(name,offset-width,y,width,strip,1,a,0,b);
       if (offset+width<W) paintedSlice(name,offset+width,y,width,strip,1,a,0,b);
     }
-    if (roof) roofSky(left,width,sceneryTime,progress.won);
-  } else backdrop(roof?"roof":"lab",width,H,cam*rate,()=>{});
+    roofSky(left,width,sceneryTime,progress.won);
+  } else backdrop("roof",width,H,cam*rate,()=>{});
   drawFixtures2D();
   for (let i = 0; i < 22; i++) {
     let x = wrap(i * 107 - cam * 0.3, W),
@@ -419,7 +425,7 @@ function drawFixtures2D() {
     const width=w*1.18;
     if (key && fixtureAtlas.regions["reflection-"+key])
       cropStamp(furniturePaint,fixtureAtlas.regions,"reflection-"+key,x-w/2,feet,w,Math.min(15,h*.37),flip);
-    groundContact(x+dir*width*.035,feet,width,Math.max(7,w*.14),dir<0);
+    if (!item.onBench) groundContact(x+dir*width*.035,feet,width,Math.max(7,w*.14),dir<0);
     if (key) cropStamp(furniturePaint,fixtureAtlas.regions,key,x-w/2,feet-h,w,h,flip);
     if (item.seal) {
       r(x-34,feet-h-19,68,20,"#a37c50"); r(x-32,feet-h-17,64,16,"#344951");
@@ -556,7 +562,9 @@ function monsters() {
     }
   }
 }
-function particles() {
+function friendlyEffects() {
+  g.save();
+  if (quietCombat()) g.globalAlpha = .53;
   for (const s of shots) if (!s.team) drawCombatShot(s);
   for (const e of effects) {
     let x = e.x - cam, y = e.y;
@@ -592,7 +600,10 @@ function particles() {
       );
     }
   }
-  // Warning lines, marked landing sites and enemy cores stay legible over friendly explosions.
+  g.restore();
+}
+function threatEffects() {
+  // Threat outlines and enemy cores sit over the player and friendly effects.
   for (const e of foes) if (e.boss && e.warn > 0) {
     bossCharge(e);
     warningPath(e);
@@ -685,8 +696,16 @@ function miniMap() {
     for(let k=0;k<3;k++)rect(dx-3+2*k,routeY-5-k,2,1,"#f7d28c");
   }
   const px = u(player.x);
-  rect(px-3,routeY-5,7,6,"#193e3b"); rect(px-1,routeY+1,3,2,"#193e3b");
-  rect(px-2,routeY-4,5,4,"#ffce6a"); rect(px-1,routeY-4,2,1,"#fff2c4");
+  const leg = chooseQuestLeg();
+  if (leg) {
+    const target = u(leg.point.x);
+    rect(target-1,routeY-15,3,15,"#775425");
+    for (let k=-4; k<=4; k++) rect(target-(4-Math.abs(k)),routeY-14+k,9-2*Math.abs(k),"#835a26");
+    for (let k=-2; k<=2; k++) rect(target-(2-Math.abs(k)),routeY-14+k,5-2*Math.abs(k),"#fff0a0");
+  }
+  rect(px-4,routeY-4,9,8,"#183646");
+  rect(px-3,routeY-3,7,6,"#5ddef0");
+  rect(px-1,routeY-2,3,3,"#e9fcff");
 }
 function holdDepartureFrame() {
   if (!sceneTransition || sceneTransition.arrived !== null || reducedMotion.matches) return false;
@@ -727,13 +746,25 @@ function revealArrival() {
 
 function render() {
   if (holdDepartureFrame()) return;
+  const defeated = foes.find(e => e.boss && e.dying);
+  const stage = $("stage");
+  if (stage.hasAttribute("data-fanfare") !== !!defeated) stage.toggleAttribute("data-fanfare", !!defeated);
+  const wider = !!defeated && !quietCombat() && stage.clientWidth * H / Math.max(1, stage.clientHeight) < 310;
+  if (stage.hasAttribute("data-wide-clear") !== wider) {
+    if (wider) {
+      const span = clamp(Math.abs(player.x - defeated.x) + 145, 310, 450);
+      stage.style.setProperty("--clear-height", H / span * 100 + "vw");
+    }
+    stage.toggleAttribute("data-wide-clear", wider);
+    resize();
+  }
   if (fieldDpr !== (window.devicePixelRatio || 1)) resize();
   ink.clearRect(0, 0, lettering.width, lettering.height);
   ink.save();
   g.imageSmoothingEnabled = false;
   g.clearRect(0, 0, W, H);
   g.save();
-  const offset = !reducedMotion.matches && shake > 0.5 ? Math.round(Math.sin(clock * 93) * shake) : 0;
+  const offset = !quietCombat() && shake > 0.5 ? Math.round(Math.sin(clock * 93) * Math.min(shake, 5)) : 0;
   const depth = typeof campusWorld !== "undefined" && campusWorld.draw(offset);
   if (offset) {
     g.translate(offset, 0);
@@ -743,13 +774,17 @@ function render() {
   else if (scene.type === "floor") hall(depth);
   else if (scene.type === "classroom") classroomInterior(depth);
   else if (!depth) battleBack();
-  const defeated = foes.find(e => e.boss && e.dying);
+  if (scene.type === "arena") {
+    const x = 494 - cam;
+    if (x > -85 && x < W + 85) label(subjects[scene.subject].room, x, 91, "#e9e4ca", "#485953", 9);
+  }
   if (defeated) drawBossClearBack(defeated);
   drawCombatGround();
   monsters();
   chooseQuestLeg();
+  friendlyEffects();
   character();
-  particles();
+  threatEffects();
   if (defeated) drawBossClearFront(defeated);
   drawQuestArrow(player.x - cam);
   g.restore();
@@ -772,6 +807,7 @@ function tick(ms) {
   render();
   advanceQuestNotice(elapsed);
   if (ms - hudTime > 95) {
+    refreshPractice();
     statusBars();
     hudTime = ms;
   }

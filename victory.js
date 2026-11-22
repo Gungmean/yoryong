@@ -10,13 +10,13 @@ const bossClearEffects = [
 const bossBurstAt = .39;
 
 function beginBossClear(boss) {
-  boss.clearDuration = reducedMotion.matches ? .7 : boss.kind === 4 ? 2.45 : 1.88;
+  boss.clearDuration = quietCombat() ? .7 : boss.kind === 4 ? 2.45 : 1.88;
   boss.dying = boss.clearDuration;
   boss.rush = null;
   shots = [];
   bossZones.length = 0;
   player.inv = boss.clearDuration + .15;
-  if (!reducedMotion.matches) contactPause = .105;
+  if (!quietCombat()) contactPause = .085;
 }
 
 function bossClearAge(boss) {
@@ -29,7 +29,7 @@ function advanceBossClear(boss, dt) {
   if (age - dt >= impactAt || age < impactAt) return;
   const finale = boss.kind === 4;
   playEffect(bossClearEffects[boss.kind].sound, finale ? 1.10 : .90);
-  if (!reducedMotion.matches) shake = Math.max(shake, finale ? 11 : 7);
+  if (!quietCombat()) shake = Math.max(shake, finale ? 5 : 4);
   player.celebrate = .70;
 }
 
@@ -51,7 +51,7 @@ function bossClearLight(boss, x, y, profile, age) {
 }
 
 function drawBossClearBack(boss) {
-  if (reducedMotion.matches) return;
+  if (boss.clearDuration < 1) return;
   const profile = bossClearEffects[boss.kind], age = bossClearAge(boss), x = boss.x - cam;
   const after = age - bossBurstAt;
   const darkness = Math.min(.26, age * 1.45, boss.dying * 1.04);
@@ -112,21 +112,61 @@ function victorySeal(kind, x, y, phase, fade, moving) {
   const size = final ? 65 : 49;
   g.save();
   g.globalAlpha = fade;
-  fxArc(x, y, size * .60, size * .60, "#242039", 0, Math.PI * 2, 4);
-  fxArc(x, y, size * .60, size * .60, halo);
+  if (!moving || kind === 0 || final) {
+    fxArc(x, y, size * .60, size * .60, "#242039", 0, Math.PI * 2, 4);
+    fxArc(x, y, size * .60, size * .60, halo);
+  }
   if (final && moving) {
     for (let i = 0; i < 4; i++) {
-      const angle = i * Math.PI / 2 + phase * 3.5;
-      const radius = 55 + (1 - phase) * 32;
+      const angle = i * Math.PI / 2 + phase * 6.2;
+      const radius = (1 - phase) * 88;
       const sealX = x + Math.cos(angle) * radius, sealY = y + Math.sin(angle) * radius * .82;
       const seal = "earned-" + subjectIcons[i];
       icon(seal);
-      g.drawImage(iconTiles[seal], Math.round(sealX - 10), Math.round(sealY - 10), 20, 20);
+      if (radius > 13) g.drawImage(iconTiles[seal], Math.round(sealX - 10), Math.round(sealY - 10), 20, 20);
     }
+    g.globalAlpha *= clamp((phase - .45) * 2, 0, 1);
   }
   if (badge?.width) g.drawImage(badge, Math.round(x - size / 2), Math.round(y - size / 2), size, size);
   star(x + size * .42, y - size * .46, 3, halo);
   g.restore();
+}
+
+function animateSeal(boss, x, crest, after) {
+  const kind = boss.kind, profile = bossClearEffects[kind];
+  const t = clamp((after - .31) / (kind === 4 ? .88 : .58), 0, 1);
+  const lift = 1 - (1 - t) ** 2;
+  const fade = Math.min(1, after * 4 - .8, boss.dying / .18);
+  let y = crest - 20;
+  g.save();
+  g.globalAlpha = fade;
+  if (kind === 0) {
+    y += 17 * (1 - lift);
+    const angle = -Math.PI / 2 + t * Math.PI * 2.5;
+    fxArc(x,y,65 - 37*t,11 + 18*t,profile.color,angle,angle+Math.PI*1.68,2);
+    star(x + Math.cos(angle)*(65-37*t),y+Math.sin(angle)*(11+18*t),4,profile.bright);
+  } else if (kind === 1) {
+    y = crest + 19 - lift * 47;
+    for (let i=0; i<7; i++) {
+      const dx=(i-3)*(9+7*t), dy=(i%3)*9-t*30;
+      g.globalAlpha = fade * (1 - t);
+      fxArc(x+dx, y+dy, 9-i%3*2, 7-i%3, profile.bright,0,Math.PI*2,2);
+    }
+  } else if (kind === 2) {
+    y = boss.y - 46 - 72 * lift;
+    fxLine([[x-15,boss.y],[x-11,y+27],[x,y+17]], "#4c8153", 4);
+    path([[x-10,y+37],[x-34,y+23],[x-26,y+40],[x-10,y+44]], profile.color);
+    path([[x-9,y+27],[x+20,y+21],[x+17,y+32],[x-8,y+34]], "#68a969");
+  } else if (kind === 3) {
+    y = boss.y - 33 - 75 * lift;
+    for (const side of [-1,1]) {
+      const px=x+side*(8+45*t), py=boss.y - 8 - Math.sin(t*Math.PI)*12;
+      path([[px-side*15,py],[px-side*9,py-25],[px+side*6,py-31],[px+side*20,py-10],[px+side*17,py]],"#875e4e");
+      fxLine([[px-side*9,py-25],[px+side*6,py-31],[px+side*20,py-10]],profile.color,2);
+    }
+  }
+  g.restore();
+  victorySeal(kind,x,y,t,fade,true);
 }
 
 function drawBossClearFront(boss) {
@@ -134,7 +174,7 @@ function drawBossClearFront(boss) {
   // Keep the fanfare in view with a narrow portrait camera or a long-distance final hit.
   const margin = Math.min(W / 2, boss.kind === 4 ? 64 : 38);
   const x = clamp(boss.x - cam, margin, W - margin);
-  if (reducedMotion.matches) {
+  if (boss.clearDuration < 1) {
     if (age > .15) victorySeal(boss.kind, x, boss.y - boss.height * .61, 1, 1, false);
     return;
   }
@@ -158,9 +198,5 @@ function drawBossClearFront(boss) {
   }
   victoryFragments(boss.kind, origin, boss.y, boss.height, profile, after);
   g.restore();
-  if (after > .31) {
-    const rise = clamp((after - .31) / .52, 0, 1);
-    const fade = Math.min(1, rise * 3, boss.dying / .18);
-    victorySeal(boss.kind, x, crest + 18 - (1 - (1 - rise) ** 2) * 47, rise, fade, true);
-  }
+  if (after > .31) animateSeal(boss,x,crest,after);
 }

@@ -30,7 +30,29 @@ let player = {
   buffer: 0,
 };
 function newProgress() {
-  return { learned: [], cleared: [], slots: [null, null, null, null], won: false, intro: false };
+  return { learned: [], cleared: [], slots: [null, null, null, null], won: false, intro: false, practice: 0 };
+}
+const coarseInput = matchMedia("(pointer: coarse)");
+let panelBack = null, attackPointer = null;
+const portraitPath = name => "assets/" + (/^scholar[0-7]$/.test(name) ? "portraits/" : "") + name + ".png";
+let effectsVolume = 1, musicVolume = 1, reducedCombat = false;
+const quietCombat = () => reducedCombat || reducedMotion.matches;
+function completePractice(task) {
+  if (scene.type !== "floor" || !progress.intro || (progress.practice & task)) return;
+  progress.practice |= task;
+  save();
+}
+function refreshPractice() {
+  const panel = $("practice");
+  const slot = progress.slots.findIndex(id => id != null);
+  let instruction = "";
+  if (scene.type === "floor" && progress.intro && !modal && !sceneTransition && $("quest-notice").hidden) {
+    if (!(progress.practice & 1)) instruction = coarseInput.matches ? "점프 버튼으로 뛰어 보세요." : "Alt로 점프해 보세요.";
+    else if (!(progress.practice & 2)) instruction = coarseInput.matches ? "회피 버튼으로 대시해 보세요." : "Shift로 회피 대시를 해 보세요.";
+    else if (!(progress.practice & 4) && slot >= 0) instruction = slotKeys[slot] + (coarseInput.matches ? " 버튼을 눌러 배운 스킬을 써 보세요." : " 키로 배운 스킬을 써 보세요.");
+  }
+  if (panel.hidden === !!instruction) panel.hidden = !instruction;
+  if (instruction && $("practice-task").textContent !== instruction) $("practice-task").textContent = instruction;
 }
 let progress = newProgress();
 let runGeneration = 0;
@@ -74,10 +96,11 @@ function stairX(type, side) {
   return sideStairs[type].find((stair) => stair.side === side)?.x ?? STAIR;
 }
 function cameraTarget() {
-  if (scene.type === "classroom" && W > worldWidth) return (worldWidth - W) / 2;
+  if (["classroom", "arena"].includes(scene.type) && W > worldWidth) return (worldWidth - W) / 2;
   const boss = foes.find(e => e.boss);
-  if (boss?.dying && !reducedMotion.matches) {
-    const focus = Math.abs(player.x - boss.x) < W * .88 ? (player.x + boss.x) / 2 : boss.x;
+  if (boss?.dying && !quietCombat()) {
+    const separation = boss.x - player.x;
+    const focus = Math.abs(separation) < W - 75 ? (player.x + boss.x) / 2 + Math.sign(separation) * 17 : boss.x;
     return clamp(focus - W * .5, 0, Math.max(0, worldWidth - W));
   }
   if (boss && W < 410 && Math.abs(player.x - boss.x) < W * .78)
@@ -147,7 +170,7 @@ function crossfadeMusic(incoming, outgoing) {
   if (from === 1 && !outgoing.paused && other === 1) outgoing.pause();
   function fade(now) {
     const t = clamp((now - start) / 320, 0, 1);
-    incoming.volume = from + (1 - from) * t;
+    incoming.volume = from + (musicVolume - from) * t;
     outgoing.volume = other * (1 - t);
     if (t < 1) musicFade = requestAnimationFrame(fade);
     else outgoing.pause();
@@ -213,6 +236,9 @@ function save() {
         mp,
         sound,
         musicEnabled,
+        musicVolume,
+        effectsVolume,
+        reducedCombat,
         sceneryPaused,
         encounter,
       }),
@@ -272,17 +298,23 @@ function load() {
     if (s.type === "roof" && progress.cleared.length === 4)
       scene = { type: "roof", floor: 6, subject: 4 };
     if (scene.type !== "gate") progress.intro = true;
+    progress.practice = Number.isInteger(d.progress.practice)
+      ? d.progress.practice & 7 : progress.intro ? 7 : 0;
     player.x = Number.isFinite(d.x) ? d.x : GATE_START;
     hp = clamp(Number(d.hp) || 100, 1, 100);
     mp = clamp(Number(d.mp) || 0, 0, 60);
     sound = d.sound !== false;
     musicEnabled = d.musicEnabled !== false;
+    musicVolume = Number.isFinite(d.musicVolume) ? clamp(d.musicVolume, 0, 1) : 1;
+    effectsVolume = Number.isFinite(d.effectsVolume) ? clamp(d.effectsVolume, 0, 1) : 1;
+    reducedCombat = d.reducedCombat === true;
     sceneryPaused = d.sceneryPaused === true;
     resumeFoe = d.encounter;
     return true;
   } catch {}
 }
 function refresh() {
+  clearAttackPointer();
   syncQuest();
   $("maptitle").textContent = scene.type === "gate" ? "부광고 정문" : floorName();
   $("minimap").ariaLabel = floorName() + " · 캠퍼스 지도 열기";
@@ -338,10 +370,13 @@ function show(kind, title, body, canClose = true) {
     returnFocus = document.activeElement?.closest("#shell button") || $("world");
     for (const child of $("shell").children) child.inert = child !== $("overlay");
   }
+  if (modal !== kind) panelBack = null;
   modal = kind;
   panelSince = performance.now();
   $("overlay").dataset.kind = kind;
   keys.clear();
+  clearAttackPointer();
+  document.querySelectorAll(".held").forEach(button => button.classList.remove("held"));
   player.vx = 0;
   player.buffer = 0;
   $("overlay").hidden = false;
@@ -361,11 +396,13 @@ function show(kind, title, body, canClose = true) {
   ($("panel").querySelector(".panel-body button:not(:disabled)") || $("panel").querySelector("button"))?.focus({ preventScroll: true });
 }
 function dismissPanel() {
-  if (modal === "reset") $("cancel").click();
+  if (panelBack) panelBack();
+  else if (modal === "reset") $("cancel").click();
   else closePanel();
 }
 function closePanel() {
   modal = "";
+  panelBack = null;
   $("overlay").hidden = true;
   for (const child of $("shell").children) child.inert = false;
   (returnFocus?.isConnected ? returnFocus : $("world")).focus({ preventScroll: true });
@@ -376,9 +413,9 @@ function dialogue(name, asset, line, button, fn) {
   show(
     "dialogue",
     name,
-    '<div class="conversation"><img class="portrait" src="assets/' +
-      asset +
-      '.png" alt=""><div><p>' +
+    '<div class="conversation"><img class="portrait" src="' +
+      portraitPath(asset) +
+      '" alt=""><div><p>' +
       line +
       '</p><button class="confirm" id="continue">' +
       button +
@@ -391,6 +428,7 @@ function dialogue(name, asset, line, button, fn) {
   };
 }
 function showMap() {
+  const route = chooseQuestLeg(), goal = trackedQuest === epilogue ? -1 : trackedQuest.floor;
   let entries = [
     "옥상 · 기억의 균열",
     "5층 · 지구과학",
@@ -403,7 +441,9 @@ function showMap() {
   show(
     "map",
     "캠퍼스 지도",
-    '<canvas class="atlas-preview" id="mapdetail" width="176" height="48" aria-label="현재 지역의 지도"></canvas>' + entries
+    '<canvas class="atlas-preview" id="mapdetail" width="176" height="48" aria-label="현재 지역의 지도"></canvas>' +
+    '<p class="map-legend"><span>● 내 위치</span><span>◆ 현재 목표</span><span>▟ 계단</span></p>' +
+    (route ? '<p class="map-cue">' + route.cue + '</p>' : '') + entries
       .map((s, i) => {
         let f = 6 - i,
           sub = f - 2;
@@ -427,6 +467,7 @@ function showMap() {
           s +
           "</b><span>" +
           (scene.floor === f ? '<em class="here">현 위치</em> ' : "") +
+          (goal === f ? '<em class="goal">목적지</em> ' : route?.next === f ? '<em class="goal">다음 층</em> ' : "") +
           status +
           "</span></div>"
         );
@@ -446,7 +487,7 @@ function showQuest() {
   show(
     "quest",
     "모험 일지",
-    `<section class="quest-brief"><img src="assets/${q.art}.png" alt="">
+    `<section class="quest-brief"><img src="${portraitPath(q.art)}" alt="">
       <div><small>${q === epilogue ? "탐험 완료" : "메인 퀘스트"} · ${q.chapter}</small><h3>${q.title}</h3><p>${q.story}</p></div>
       <dl><dt>목적지</dt><dd>${q.place}</dd><dt>지금 할 일</dt><dd>${cue}</dd>
       ${q.kind === "boss" ? "<dt>전투 단서</dt><dd>" + subjects[q.id].hint + "</dd>" : ""}
@@ -475,6 +516,16 @@ function showQuest() {
     button.onclick = () => showSeal(Number(button.dataset.seal));
   });
 }
+const skillDetails = [
+  "사과가 떨어지는 지점에 범위 피해",
+  "전방으로 전기 투사체 발사",
+  "낙하 범위 공격 · 내 체력 10 회복",
+  "전방으로 산성 투사체 3발 발사",
+  "덩굴 적중 시 2.2초간 이동 둔화",
+  "전방으로 물결을 그리며 날아가는 포자",
+  "바위 세 번 낙하 · 타격당 피해 12~14",
+  "요룡이 좌우로 넓은 지진파",
+];
 function showEquip(activeSlot = 0) {
   const equipped = progress.slots[activeSlot];
   const imageFor = (id) => id == null ? icon("lock") : "assets/skill" + id + ".png";
@@ -488,7 +539,7 @@ function showEquip(activeSlot = 0) {
     const s = scholars[id], index = progress.slots.indexOf(id);
     const state = index < 0 ? "장착" : index === activeSlot ? "장착 중" : slotKeys[index] + "에서 교환";
     return `<button class="skill-choice" data-skill="${id}" aria-pressed="${id === equipped}">
-      <img src="${imageFor(id)}" alt=""><span><b>${s[1]}</b><small>피해 ${s[9]} · 재사용 ${s[10]}초</small></span><em>${state}</em></button>`;
+      <img src="${imageFor(id)}" alt=""><span><b>${s[1]}</b><small>${id === 6 ? "" : "피해 " + s[9] + " · "}MP 7 · 재사용 ${s[10]}초</small><small>${skillDetails[id]}</small></span><em>${state}</em></button>`;
   }).join("");
   show("equip", "스킬 배치",
     `<div class="sockets" role="group" aria-label="배치할 슬롯">${sockets}</div>
@@ -522,7 +573,16 @@ function syncMotionSwitch() {
   button.lastElementChild.textContent = reducedMotion.matches ? "기기 설정 · 줄임" : enabled ? "켜짐" : "꺼짐";
 }
 reducedMotion.addEventListener("change", syncMotionSwitch);
+function syncCombatSwitch() {
+  const button = $("combat-motion");
+  if (!button) return;
+  button.disabled = reducedMotion.matches;
+  button.setAttribute("aria-pressed", String(quietCombat()));
+  button.lastElementChild.textContent = reducedMotion.matches ? "기기 설정 · 줄임" : reducedCombat ? "줄임" : "기본";
+}
+reducedMotion.addEventListener("change", syncCombatSwitch);
 function menu() {
+  const volumeRow = (id, label, value) => `<label class="volume-row" for="${id}"><span>${label}</span><input type="range" id="${id}" min="0" max="100" value="${Math.round(value * 100)}"><output for="${id}">${Math.round(value * 100)}%</output></label>`;
   show("menu", "요룡이의 과학 모험",
     `<button class="confirm" id="resume">모험 계속하기</button>
     <div class="menu-links">
@@ -535,17 +595,35 @@ function menu() {
     <h3 class="choice-title" id="settings-title">설정</h3>
     <div class="settings-list">
       <button class="rowbtn" id="music" aria-pressed="${musicEnabled}">배경음악<b class="switch-state">${musicEnabled ? "켜짐" : "꺼짐"}</b></button>
+      ${volumeRow("music-volume", "배경음악 크기", musicVolume)}
       <button class="rowbtn" id="sound" aria-pressed="${sound}">효과음<b class="switch-state">${sound ? "켜짐" : "꺼짐"}</b></button>
+      ${volumeRow("effects-volume", "효과음 크기", effectsVolume)}
       <button class="rowbtn" id="full">전체화면<b class="switch-state"></b></button>
       <button class="rowbtn" id="motion"><span>배경 움직임</span><b class="switch-state"></b></button>
+      <button class="rowbtn" id="combat-motion"><span>전투 연출 줄이기</span><b class="switch-state"></b></button>
       <button class="rowbtn" id="reset" aria-haspopup="dialog">게임 초기화</button>
     </div></section>
     <p class="save-note"><i data-icon="save"></i><span id="savestatus">${saveMessage}</span></p>`);
   $("resume").onclick = closePanel;
-  $("tomap").onclick = showMap;
-  $("toequip").onclick = () => showEquip();
-  $("toquest").onclick = showQuest;
-  $("help").onclick = showHelp;
+  for (const [id, open] of [["tomap", showMap], ["toequip", showEquip], ["toquest", showQuest], ["help", showHelp]]) {
+    $(id).onclick = () => {
+      open();
+      panelBack = () => { menu(); $(id).focus(); };
+    };
+  }
+  const volume = (id, update) => {
+    const slider = $(id);
+    slider.oninput = () => {
+      slider.nextElementSibling.textContent = slider.value + "%";
+      update(+slider.value / 100);
+      save();
+    };
+  };
+  volume("music-volume", value => {
+    musicVolume = value;
+    if (musicTrack) musicTracks[musicTrack].volume = value;
+  });
+  volume("effects-volume", value => { effectsVolume = value; syncEffectsVolume(); });
   $("music").onclick = () => {
     musicEnabled = !musicEnabled;
     $("music").setAttribute("aria-pressed", String(musicEnabled));
@@ -566,6 +644,12 @@ function menu() {
   $("full").onclick = toggleFullscreen;
   syncFullscreen();
   syncMotionSwitch();
+  syncCombatSwitch();
+  $("combat-motion").onclick = () => {
+    reducedCombat = !reducedCombat;
+    syncCombatSwitch();
+    save();
+  };
   $("motion").onclick = () => {
     sceneryPaused = !sceneryPaused;
     syncMotionSwitch();
@@ -597,13 +681,23 @@ function confirmReset() {
   };
 }
 function showHelp() {
-  show("help", "조작 안내", [
+  const touchHelp = [
+    ["← →", "누르고 있는 동안 좌우로 이동"], ["점프", "공중에서 한 번 더 눌러 더블 점프"],
+    ["↓ + 점프", "책상이나 발판 아래로 내려오기"], ["회피", "바라보는 방향으로 회피 대시"],
+    ["A", "기본 공격 · 누르고 있으면 연속 공격"], ["Q W E R", "스킬 사용 · 빈 슬롯을 누르면 스킬 배치"],
+    ["↑", "대화 · 입장 · 계단 한 층 올라가기"], ["↓", "계단 한 층 내려가기"], ["메뉴", "지도 · 스킬 배치 · 모험 일지"],
+  ];
+  const keyboardHelp = [
     ["← →", "좌우 이동"], ["Alt", "점프 · 공중에서 더블 점프"],
     ["↓ + Alt", "발판 내려오기"], ["Shift", "회피 대시"],
     ["A", "기본 공격"], ["Q W E R", "장착한 스킬 사용"], ["K", "스킬 배치"],
     ["↑", "대화 · 입장 · 계단 한 층 올라가기"], ["↓", "계단에서 한 층 내려가기"],
     ["숫자", "문제 답 고르기"], ["M", "캠퍼스 지도"], ["J", "모험 일지"], ["Esc", "메뉴 · 닫기"]
-  ].map(([key, action]) => `<div class="help-row"><kbd>${key}</kbd><span>${action}</span></div>`).join(""));
+  ];
+  show("help", "조작 안내", (coarseInput.matches ? touchHelp : keyboardHelp)
+    .map(([key, action]) => `<div class="help-row"><kbd>${key}</kbd><span>${action}</span></div>`).join("") +
+    '<button class="rowbtn" id="practice-again">조작 연습 다시 하기</button>');
+  $("practice-again").onclick = () => { progress.practice = 0; save(); closePanel(); };
 }
 function quiz(id) {
   const s = scholars[id];
@@ -620,13 +714,13 @@ function quiz(id) {
     );
     return;
   }
-  const ask = (feedback = "") => {
+  const ask = (feedback = "", selected = null) => {
     show(
       "quiz",
       s[0],
-      '<div class="conversation"><img class="portrait" src="assets/scholar' +
-        id +
-        '.png" alt="' +
+      '<div class="conversation"><img class="portrait" src="' +
+        portraitPath("scholar" + id) +
+        '" alt="' +
         s[0] +
         '"><div><div class="tag">' +
         subjects[Math.floor(id / 2)].name +
@@ -647,12 +741,13 @@ function quiz(id) {
           .join("") +
         (feedback ? '<p class="small" role="status">' + feedback + "</p>" : ""),
     );
+    if (selected !== null) $("panel").querySelector(`[data-answer="${selected}"]`).focus();
     document.querySelectorAll("[data-answer]").forEach(
       (el) =>
         (el.onclick = () => {
           if (+el.dataset.answer !== s[6]) {
             playEffect("wrong");
-            ask("조금 더 생각해 보자. 다른 답을 골라 보세요.");
+            ask("조금 더 생각해 보자. 다른 답을 골라 보세요.", el.dataset.answer);
             return;
           }
           progress.learned.push(id);
@@ -1036,7 +1131,8 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
     if (skill < 0) playEffect("hit");
     else if (!skillSounds[skill].onGround) playEffect(skillSounds[skill].impact);
     combatEvent("impact", e.x, chest, .36, { id: skill, dir, target: e });
-    if (!reducedMotion.matches) contactPause = Math.max(contactPause, e.hp === 0 && e.boss ? .05 : 1 / 60);
+    const heavy = skill === 0 || skill === 2 || skill === 7;
+    if (!quietCombat()) contactPause = Math.max(contactPause, heavy ? .034 : skill < 0 ? .012 : 0);
   }
   shake = Math.max(shake, 2);
   if (wasAboveHalf && e.hp > 0 && bossPhase(e) === 2) {
@@ -1070,7 +1166,7 @@ function hurt(n) {
     show(
       "down",
       "잠시 숨을 고르자",
-      '<div class="conversation"><img class="portrait" src="assets/hero.png" alt=""><p>요룡이가 지쳤다. 익힌 스킬과 모은 인장을 간직한 채 다시 도전할 수 있다.</p></div><button class="confirm" id="retry">체력 회복 후 다시 도전</button>',
+      '<div class="conversation"><img class="portrait" src="assets/hero.png" alt=""><p>요룡이의 체력과 마력이 회복됩니다. 스킬과 인장은 유지되며, 보스전은 보스의 체력이 가득 찬 상태에서 다시 시작합니다.</p></div><button class="confirm" id="retry">체력 회복 후 다시 도전</button>',
       false,
     );
     $("retry").onclick = () => {
@@ -1131,6 +1227,7 @@ function cast(slot) {
     return;
   }
   player.castTime = 0.42;
+  completePractice(4);
   mp -= 7;
   cool[id] = scholars[id][10];
   const dir = player.face,
@@ -1146,8 +1243,8 @@ function cast(slot) {
     y: player.y - 40,
     id,
     flip: dir < 0,
-    max: 0.7,
-    life: 0.7,
+    max: 0.46,
+    life: 0.46,
   });
   playEffect(skillSounds[id].cast);
   const dmg = scholars[id][9];
@@ -1252,6 +1349,7 @@ function step(dt) {
   if (p.buffer > 0 && p.jumps < 2) {
     p.vy = p.jumps === 0 ? -213 : -192;
     p.jumps++;
+    completePractice(1);
     p.leapTime = 0.1;
     p.buffer = 0;
     spark(p.x, p.y, "#d5f5ff", 5);
@@ -1287,7 +1385,7 @@ function step(dt) {
       playEffect(footstepSound(p.y < GROUND));
     }
   } else if (!p.grounded) p.stepDistance = 0;
-  if (keys.has("KeyA")) attack();
+  if (keys.has("KeyA") || attackPointer !== null) attack();
   if (modal) return;
   cam +=
     (cameraTarget() - cam) *
@@ -1349,7 +1447,7 @@ function step(dt) {
       }
     }
     // Sample world positions before movement so trails follow turns, camera motion and falling shots.
-    if (!reducedMotion.matches && s.id !== 6 && (!s.trail || Math.floor(s.age * 25) !== Math.floor((s.age - dt) * 25))) {
+    if (!quietCombat() && s.id !== 6 && (!s.trail || Math.floor(s.age * 25) !== Math.floor((s.age - dt) * 25))) {
       s.trail ??= [];
       s.trail.unshift({ x: s.x, y: s.y, flip: s.vx < 0 });
       if (s.trail.length > 8) s.trail.pop();
@@ -1439,6 +1537,7 @@ function press(code, repeat = false) {
       player.dash = 0.19;
       player.inv = 0.25;
       player.dashCD = 0.75;
+      completePractice(2);
       spark(player.x, player.y - 7, "#abd9ec", 7);
       playEffect("dash");
     }
@@ -1480,7 +1579,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (modal && e.key === "Tab") {
-    const buttons = $("panel").querySelectorAll("button:not(:disabled)");
+    const buttons = $("panel").querySelectorAll("button:not(:disabled), input:not(:disabled)");
     const first = buttons[0], last = buttons[buttons.length - 1];
     if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
       e.preventDefault();
@@ -1542,6 +1641,7 @@ $("minimap").onclick = showMap;
 $("quest").onclick = showQuest;
 $("loadout").onclick = () => showEquip();
 $("controls").onclick = showHelp;
+$("practice-skip").onclick = () => { progress.practice = 7; save(); refreshPractice(); $("world").focus(); };
 const smallField = window.matchMedia("(max-width: 600px), (max-height: 490px)");
 let userMapExpanded = null;
 function syncMinimap() {
@@ -1571,16 +1671,42 @@ function syncFullscreen() {
   $("full").lastElementChild.textContent = active ? "켜짐" : "꺼짐";
 }
 document.addEventListener("fullscreenchange", syncFullscreen);
-$("slots").onclick = (e) => {
+const slots = $("slots");
+slots.onpointerdown = event => {
+  const button = event.target.closest('[data-slot="A"]');
+  if (!button || event.button !== 0 || attackPointer !== null) return;
+  attackPointer = event.pointerId;
+  button.setPointerCapture(event.pointerId);
+  button.classList.add("held");
+  attack();
+};
+function clearAttackPointer() {
+  if (attackPointer === null) return;
+  attackPointer = null;
+  slots.querySelector('[data-slot="A"]')?.classList.remove("held");
+}
+function endAttackPointer(event) {
+  if (attackPointer === event.pointerId) clearAttackPointer();
+}
+for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) slots.addEventListener(event, endAttackPointer);
+window.addEventListener("blur", clearAttackPointer);
+slots.onclick = (e) => {
   let b = e.target.closest("[data-slot]");
   if (!b) return;
   let k = b.dataset.slot;
-  if (k === "A") attack();
+  if (k === "A") { if (e.detail === 0) attack(); }
   else if (progress.slots[slotKeys.indexOf(k)] == null) showEquip(slotKeys.indexOf(k));
   else cast(slotKeys.indexOf(k));
 };
+slots.oncontextmenu = event => {
+  const index = slotKeys.indexOf(event.target.closest("[data-slot]")?.dataset.slot);
+  if (index < 0) return;
+  event.preventDefault();
+  showEquip(index);
+};
 function showSeal(i) {
   const s = subjects[i];
+  const journalBack = panelBack;
   show(
     "seal",
     s.seal,
@@ -1600,7 +1726,12 @@ function showSeal(i) {
       (progress.cleared.includes(i) ? "획득" : "미획득") +
       '</span></div><button class="rowbtn" id="backjournal">모험 일지로 돌아가기</button>',
   );
-  $("backjournal").onclick = showQuest;
+  panelBack = () => {
+    showQuest();
+    panelBack = journalBack;
+    $("panel").querySelector(`[data-seal="${i}"]`).focus();
+  };
+  $("backjournal").onclick = dismissPanel;
 }
 const continuingRun = load();
 setScene();

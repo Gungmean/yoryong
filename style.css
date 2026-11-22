@@ -57,10 +57,17 @@ kbd {
 #scene-shade { inset: 0; background: #101827; }
 #scene-arrival { inset-inline: 8px; top: 28%; display: flex; justify-content: center; }
 .arrival-sign {
+  position: relative; isolation: isolate;
   display: grid; justify-items: center; gap: 5px; padding: 14px clamp(27px,9vw,85px);
-  background: radial-gradient(ellipse closest-side,#122439d1 35%,#12243999 70%,transparent 100%);
-  text-shadow: 0 2px 2px #101829, 0 0 5px #101829;
+  text-shadow: 0 2px 1px #000a;
   font-family: Galmuri, "Malgun Gothic", sans-serif; line-height: 1.25; text-align: center;
+}
+.arrival-sign::before, #quest-notice::before {
+  content: ""; position: absolute; z-index: -1; inset: 0;
+  background: #14191fd1;
+  mask-image: linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent),
+    linear-gradient(transparent,#000 13px,#000 calc(100% - 13px),transparent);
+  mask-composite: intersect;
 }
 #arrival-place { font-size: 24px; color: #fff3d8; font-weight: normal; }
 #arrival-detail { font-size: 12px; color: #f2cd86; }
@@ -102,18 +109,20 @@ kbd {
   position: relative; isolation: isolate; display: grid; justify-content: stretch; gap: 4px; height: auto;
   width: clamp(205px,24vw,318px); min-width: 0; padding: 9px 13px 11px; text-align: left;
   color: #ffefd2; border: 0; background: transparent; box-shadow: none;
-  text-shadow: 0 1px 2px #101829, 0 0 5px #101829;
+  text-shadow: 0 1px 1px #000b;
 }
 #quest::before {
-  content: ""; position: absolute; z-index: -1; inset: -20px -8px -16px -24px;
-  background: linear-gradient(90deg,transparent,#112438c9 14%,#112438c9 86%,transparent);
-  mask-image: linear-gradient(#000 70%,transparent);
+  content: ""; position: absolute; z-index: -1; inset: -20px -14px -18px -34px;
+  background: #14191fcd;
+  mask-image: linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 15px),transparent),
+    linear-gradient(transparent,#000 18px,#000 calc(100% - 20px),transparent);
+  mask-composite: intersect;
 }
 #quest:focus-visible { outline: none; }
 #quest:hover #qtitle, #quest:focus-visible #qtitle { text-decoration: underline; text-underline-offset: 4px; }
 .quest-heading { display: flex; align-items: center; gap: 5px; color: #f7d28e; }
 .quest-heading small { font-size: 12px; }
-.quest-heading kbd { margin-left: auto; padding-inline: 2px; color: #fff0c3; font-size: 12px; border: 0; background: transparent; }
+.quest-heading kbd { margin-left: auto; padding-inline: 4px; color: #fff0c3; font-size: 12px; border: 0; background: #262a30; }
 #quest i { width: 19px; height: 19px; }
 #qtitle { font-size: clamp(16px,1.5vw,21px); font-weight: normal; line-height: 1.3; }
 #qaction { color: #dae9e8; font-size: clamp(12px,1vw,14px); line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
@@ -121,11 +130,13 @@ kbd {
   position: absolute; isolation: isolate; top: clamp(102px,22%,195px); inset-inline: 0;
   margin-inline: auto; width: min(590px,100%); padding: 0 clamp(26px,5vw,56px);
   pointer-events: none; color: #fff2db; text-align: center;
-  text-shadow: 0 2px 2px #101829, 0 0 6px #101829;
+  text-shadow: 0 2px 1px #000b;
 }
 #quest-notice::before {
-  content: ""; position: absolute; z-index: -1; inset: -32px -40px -36px;
-  background: radial-gradient(ellipse closest-side,#131c2aee 20%,#131c2ad4 54%,#131c2a8c 76%,transparent);
+  inset: -31px -67px;
+  background: #14191fc7;
+  mask-image: linear-gradient(90deg,transparent,#000 73px,#000 calc(100% - 73px),transparent),
+    linear-gradient(transparent,#000 30px,#000 calc(100% - 30px),transparent);
 }
 .quest-fanfare { animation: quest-fanfare-in .36s cubic-bezier(.18,.78,.27,1) both; }
 .fanfare-heading { display: flex; justify-content: center; align-items: center; gap: clamp(10px,2vw,22px); }
@@ -139,7 +150,7 @@ kbd {
 .fanfare-heading::after { transform: scaleX(-1); }
 #qn-status {
   font-size: clamp(31px,4.5vw,54px); font-weight: normal; line-height: 1.1; white-space: nowrap;
-  color: #ffe6a1; text-shadow: 0 3px #664324, 0 5px 8px #101829, 0 0 19px #d6994580;
+  color: #ffe6a1; text-shadow: 0 2px #201b13, 0 4px 3px #0009;
 }
 #quest-notice[data-event=start] #qn-status { font-size: clamp(24px,3.4vw,39px); color: #fff0bf; }
 #qn-finished { display: block; color: #ffe5ad; font-size: 14px; margin-top: 6px; }

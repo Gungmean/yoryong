@@ -38,7 +38,7 @@ const portraitPath = name => "assets/" + (/^scholar[0-7]$/.test(name) ? "portrai
 let effectsVolume = 1, musicVolume = 1, reducedCombat = false;
 const quietCombat = () => reducedCombat || reducedMotion.matches;
 function completePractice(task) {
-  if (scene.type !== "floor" || !progress.intro || (progress.practice & task)) return;
+  if (!["floor", "classroom"].includes(scene.type) || !progress.intro || (progress.practice & task)) return;
   progress.practice |= task;
   save();
 }
@@ -234,6 +234,7 @@ function save() {
         x: player.x,
         hp,
         mp,
+        courseCheckpoint: courseRun?.reached ? courseRun.id : null,
         sound,
         musicEnabled,
         musicVolume,
@@ -284,8 +285,10 @@ function load() {
       s.floor <= 5
     )
       scene = { type: "floor", floor: s.floor, subject: -1 };
-    if (s.type === "classroom" && classroomDoor(s.floor, s.room))
+    if (s.type === "classroom" && classroomDoor(s.floor, s.room)) {
       scene = { type: "classroom", floor: s.floor, room: s.room, subject: -1 };
+      savedCourse = Number.isInteger(d.courseCheckpoint) ? d.courseCheckpoint : -1;
+    }
     if (
       s.type === "arena" &&
       Number.isInteger(s.subject) &&
@@ -812,24 +815,18 @@ function labChoice(name) {
   );
 }
 function scholarPoint(id) {
-  return { x: id % 2 ? 1510 : 706, name: scholars[id][0], type: "scholar", id };
+  return { x: courseGoal.x + 27, y: courseGoal.y, name: scholars[id][0], type: "scholar", id };
 }
 function objects() {
-  if (scene.type === "classroom") return [...sideStairs.classroom, classroomBoard];
+  if (scene.type === "classroom") return [
+    ...sideStairs.classroom, classroomBoard, ...(courseRun ? [courseSign, scholarPoint(courseRun.id)] : []),
+  ];
   if (scene.type === "gate")
     return [
       ...sideStairs.gate,
       { x: 650, name: "중앙 현관", type: "entrance" },
     ];
-  if (scene.type === "floor") {
-    let a = [...hallBays[scene.floor]];
-    if (scene.floor >= 2)
-      for (let j = 0; j < 2; j++) {
-        let id = (scene.floor - 2) * 2 + j;
-        a.push(scholarPoint(id));
-      }
-    return a;
-  }
+  if (scene.type === "floor") return hallBays[scene.floor];
   return sideStairs[scene.type];
 }
 function travelStair(stair, direction) {
@@ -872,7 +869,9 @@ function travelStair(stair, direction) {
 }
 function findNear() {
   return objects()
-    .filter((o) => Math.abs(o.x - player.x) < 58 && player.y > GROUND - 65)
+    .filter(o => o.type === "scholar"
+      ? player.grounded && player.y === o.y && Math.abs(o.x - player.x) < 48
+      : Math.abs(o.x - player.x) < 58 && player.y > GROUND - 65 && (!courseRun || player.y <= GROUND))
     .sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))[0];
 }
 function interact() {
@@ -882,7 +881,7 @@ function interact() {
     notify(
       scene.type === "gate"
         ? "오른쪽 중앙 현관 표식 가까이 이동하세요."
-        : "문이나 학자 옆에서 ↑를 누르세요.",
+        : courseRun ? "끝 발판에 올라 학자 옆에서 ↑를 누르세요." : "문 옆에서 ↑를 누르세요.",
     );
     return;
   }
@@ -896,7 +895,7 @@ function interact() {
       dialogue(
         "요룡이",
         "hero",
-        "종이 울렸는데 학교가 너무 조용해. 과학실 문에는 네 개의 낯선 무늬가 있어. 위층의 학자들이라면 이 비밀을 알고 있을 거야!",
+        "종이 울렸는데 학교가 너무 조용해. 과학실 문에는 네 개의 낯선 무늬가 있어. 위층 교실에 있는 학자들이라면 이 비밀을 알고 있을 거야!",
         "학자들을 찾아서",
       );
     }
@@ -918,7 +917,12 @@ function interact() {
   }
   if (o.type === "board") {
     playEffect("page");
-    bubble(classroomNotes[scene.floor - 3][scene.room - 1]);
+    bubble(classroomNotes[scene.floor - 3]?.[scene.room - 1] || courseRun.definition.hint);
+    return;
+  }
+  if (o.type === "courseHint") {
+    playEffect("page");
+    bubble(courseRun.definition.hint + " 발판을 건너 중간 지점까지 가세요.");
     return;
   }
   if (o.name.endsWith("학실") || o.name === "물리지학실") {
@@ -978,6 +982,7 @@ function enemy(x, kind, boss = false) {
 }
 function platforms() {
   if (scene.type === "gate") return [];
+  if (courseRun) return courseRun.platforms;
   if (scene.type === "classroom") return [
     { x: 278 + (scene.room % 3) * 15, y: GROUND - 39, w: 80 },
     { x: 732 + (scene.room % 4) * 13, y: GROUND - 39, w: 80 },
@@ -996,16 +1001,18 @@ function platforms() {
 // Source rectangles, world positions and depths are shared by WebGL and Canvas 2D.
 function classroomPanels() {
   return [
-    { sx: 0, sy: (scene.floor - 3) * H, sw: 1080, sh: H, x: 0, y: 0, w: worldWidth, h: H, z: -200 },
-    ...platforms().map((desk, index) => ({
+    { sx: 0, sy: classroomArtRow() * H, sw: 1080, sh: H, x: 0, y: 0, w: worldWidth, h: H, z: -200 },
+    ...(courseRun ? [] : platforms()).map((desk, index) => ({
       sx: 2 + 136 * ((scene.room - 1 + index) % 3), sy: 1082, sw: 132, sh: 96,
       x: desk.x - desk.w / 2, y: desk.y - 19, w: desk.w, h: 58, z: 0,
     })),
   ];
 }
+const classroomArtRow = () => Math.max(0, scene.floor - 3);
 function setScene() {
   contactPause = 0;
   worldWidth = mapWidths[scene.type];
+  beginCourse();
   player.x = clamp(player.x, 20, worldWidth - 20);
   Object.assign(player, {
     y: GROUND,
@@ -1316,6 +1323,7 @@ function step(dt) {
   }
   clock += dt;
   const p = player;
+  advanceCourse(dt);
   for (const k of [
     "inv",
     "dashCD",
@@ -1364,10 +1372,12 @@ function step(dt) {
   const landing =
     p.vy >= 0 && !p.drop
       ? platforms().find(
-          (b) => Math.abs(p.x - b.x) < b.w / 2 + 2 && oldY <= b.y && p.y >= b.y,
+          (b) => b.active !== false && Math.abs(p.x - b.x) < b.w / 2 + 2 &&
+            oldY <= (b.oldY ?? b.y) && p.y >= b.y,
         )
       : null;
-  if (landing || p.y >= GROUND) {
+  const floorHit = p.y >= GROUND && (!courseRun || (oldY <= GROUND && courseHasFloor(p.x)));
+  if (landing || floorHit) {
     if (!wasGrounded && p.vy > 70) {
       p.landTime = 0.09;
       combatEvent("land", p.x, landing ? landing.y : GROUND, .29);
@@ -1377,7 +1387,15 @@ function step(dt) {
     p.vy = 0;
     p.jumps = 0;
     p.grounded = true;
+    if (courseRun) courseLanded(landing);
+  } else if (courseRun) {
+    courseRun.support = null;
+    if (p.y > GROUND + 32) {
+      retryCourse();
+      return;
+    }
   }
+  if (courseRun) checkCourseRest();
   if (axis && p.grounded && wasGrounded && p.dash <= 0) {
     p.stepDistance += Math.abs(p.x - oldX);
     if (p.stepDistance >= 34) {

@@ -825,7 +825,7 @@ const campusWorld = (() => {
       lastKey = "";
       return false;
     }
-    if ((scene.type === "classroom" || (scene.type === "floor" && scene.floor >= 3)) && !assets.classrooms.naturalWidth) {
+    if ((scene.type === "classroom" || (scene.type === "floor" && scene.floor >= 2)) && !assets.classrooms.naturalWidth) {
       canvas.hidden = true;
       lastKey = "";
       return false;

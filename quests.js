@@ -9,8 +9,10 @@ const trialTitles = ["떨어지는 사과", "빛의 약속", "저울 위의 비�
 const bossTitles = ["어긋난 궤도", "끓어오르는 실험실", "나선숲의 울림", "쏟아지는 별의 파편", "옥상의 마지막 균열"];
 const trialQuests = scholars.map((scholar, id) => {
   const subject = subjects[Math.floor(id / 2)];
+  const course = scholarCourses[id];
+  const roomName = floors[course.floor].find(([, , room]) => room === course.room)[1];
   return { kind: "trial", id, title: trialTitles[id], chapter: subject.name + " 편", floor: subject.floor,
-    place: subject.floor + "층 복도 · " + scholar[0], art: "scholar" + id, reward: scholar[1], story: "“" + scholar[3] + "”" };
+    place: subject.floor + "층 · " + roomName + " · " + scholar[0], art: "scholar" + id, reward: scholar[1], story: "“" + scholar[3] + "”" };
 });
 const bossQuests = subjects.map((subject, id) => ({
   kind: "boss", id, title: bossTitles[id], chapter: id === 4 ? "종장" : subject.name + " 편",
@@ -48,14 +50,21 @@ function buildQuestRoute(q) {
   const stairs = points.filter(p => p.type === "stair");
   if (scene.type === "gate")
     return [passage(points.find(p => p.type === "entrance"), "중앙 현관 앞에서 ↑를 눌러 본관에 들어가세요.", "중앙 현관 · ↑ 입장")];
-  if (scene.type === "classroom")
+  if (scene.type === "classroom") {
+    if (q.kind === "trial" && courseRun?.id === q.id) {
+      const hint = courseRun.definition.hint;
+      return courseRun.reached
+        ? [passage(scholarPoint(q.id), "끝 발판에 올라 학자와 대화하세요. " + hint, "끝 발판 · ↑ 학자와 대화")]
+        : [passage(courseRest, "발판을 건너 중간 지점으로 가세요. " + hint, "점프 구간 · 중간 지점까지")];
+    }
     return stairs.map(p => passage(p, p.name + "에서 ↑를 눌러 " + scene.floor + "층 복도로 나가세요.", p.name + " · ↑ 나가기"));
+  }
   if (scene.type === "arena" || scene.type === "roof") {
     const boss = foes.find(e => e.boss);
     return boss ? [passage(boss, "공격 예고에 맞춰 회피하세요.", "공격 예고가 보이면 회피")] : [];
   }
   const destination = q.kind === "trial"
-    ? scholarPoint(q.id)
+    ? classroomDoor(q.floor, scholarCourses[q.id].room)
     : q.floor === 1 ? hallBays[1].find(p => p.name === subjects[q.id].lab) : null;
   if (scene.floor !== q.floor) {
     const direction = Math.sign(q.floor - scene.floor);
@@ -70,7 +79,7 @@ function buildQuestRoute(q) {
     }));
   }
   if (q.kind === "trial")
-    return [passage(destination, destination.name + " 곁에서 ↑를 눌러 시련에 도전하세요.", destination.name + " · ↑ 대화")];
+    return [passage(destination, destination.name + "에서 ↑를 눌러 들어가세요. 발판 끝에 학자가 있어요.", destination.name + " · ↑ 입장")];
   if (destination)
     return [passage(destination, destination.name + "에서 ↑를 누르고 " + subjects[q.id].room + "을 선택하세요.", destination.name + " · ↑ 입장")];
   return [];

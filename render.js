@@ -171,7 +171,7 @@ function monsterFrame(e) {
   return Math.floor((clock + e.home) * 2) % 2;
 }
 function scholarFrame(o) {
-  const close = Math.abs(player.x - o.x) < 75;
+  const close = Math.abs(player.x - o.x) < 75 && Math.abs(player.y - o.y) < 30;
   if (close && (modal === "dialogue" || modal === "quiz")) {
     const t = (performance.now() - panelSince) / 1000;
     return [2, 3, 4, 3][Math.floor(t * 2) % 4];
@@ -295,7 +295,7 @@ function hallPlaque(bay, x) {
   word(title, x, 97, 9, "#faf0d8");
 }
 function hallBackdrop() {
-  if (!schoolPaint.naturalWidth || !roomsPaint.naturalWidth || (scene.floor >= 3 && !assets.classrooms.naturalWidth)) {
+  if (!schoolPaint.naturalWidth || !roomsPaint.naturalWidth || (scene.floor >= 2 && !assets.classrooms.naturalWidth)) {
     backdrop("corridor",540,H,cam,()=>{});
     return;
   }
@@ -329,29 +329,18 @@ function hall(depth) {
     if (["물리지학실", "생명화학실", "중앙 현관", "매점"].includes(bay.name))
       star(x, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.4, 5, "#ffe593");
   }
-  for (let o of objects().filter((o) => o.type === "scholar")) {
-    let sx = o.x - cam;
-    if (sx < -50 || sx > W + 50) continue;
-    shadow(sx, GROUND + 1, 15);
-    drawActor(
-      "scholar" + o.id,
-      scholarFrame(o),
-      sx,
-      GROUND,
-      56,
-      player.x < o.x,
-    );
-    const known = progress.learned.includes(o.id);
-    label(
-      known ? "✓" : "!",
-      sx,
-      GROUND - 73 + Math.sin(clock * 3) * 1.3,
-      known ? "#b5ddb4" : "#ffda80",
-      "#363442",
-      10,
-    );
-    label(o.name, sx, GROUND + 4, "#ffdfa5", "#32313c", 8);
-  }
+}
+function classroomScholar(o) {
+  const x = o.x - cam;
+  if (x < -80 || x > W+80) return;
+  shadow(x,o.y+1,15);
+  drawActor("scholar"+o.id,scholarFrame(o),x,o.y,56,player.x<o.x);
+  if (near?.type === "scholar") return;
+  const known = progress.learned.includes(o.id);
+  const bob = reducedMotion.matches ? 0 : Math.sin(clock*3)*1.3;
+  const half = Math.min(78,W/2);
+  label((known ? "✓ " : "! ") + o.name,clamp(x,half,W-half),o.y-74+bob,
+    known ? "#b5ddb4" : "#ffda80","#363442",9);
 }
 function classroomInterior(depth) {
   if (!depth) {
@@ -367,6 +356,10 @@ function classroomInterior(depth) {
       r(x,y,2,1,"#fbe7af");
     }
   }
+  if (courseRun) {
+    drawScholarCourse();
+    classroomScholar(scholarPoint(courseRun.id));
+  }
   for (const door of sideStairs.classroom) {
     const x = door.x - cam;
     if (x < -45 || x > W+45) continue;
@@ -380,7 +373,7 @@ function classroomInterior(depth) {
     g.globalAlpha=.65;
     chalkExperiment(0,0,sceneryTime,(scene.floor+scene.room)%4);
     g.restore();
-    word(floorName(),boardX,132,13,"#ebead9");
+    word(courseRun?.definition.name || floorName(),boardX,132,13,"#ebead9");
   }
 }
 
@@ -471,7 +464,8 @@ function drawQuestArrow(x) {
   const dx = leg.point.x - player.x;
   const atPoint = besideQuestTarget();
   const bossInReach = leg.point.boss && Math.abs(dx) < leg.point.half + 25;
-  const turn = atPoint ? -(leg.direction || 1) : (Math.abs(dx) < 10 || bossInReach) ? 1 : dx < 0 ? 2 : 0;
+  const above = leg.point.type === "scholar" && leg.point.y < player.y - 24 && Math.abs(dx) < 30;
+  const turn = atPoint ? -(leg.direction || 1) : above ? -1 : (Math.abs(dx) < 10 || bossInReach) ? 1 : dx < 0 ? 2 : 0;
   const bob = reducedMotion.matches ? 0 : Math.round(Math.sin(clock * 3.5) * 1.5);
   const y = Math.max(13, player.y - (atPoint ? 96 : 72) + bob);
   g.save();
@@ -489,7 +483,8 @@ function character() {
       : p.vx
         ? Math.abs(Math.sin(clock * 13)) * 2
         : Math.sin(clock * 2) * 0.9;
-  shadow(x, GROUND + 1, clamp(16 - (GROUND - p.y) / 10, 7, 16));
+  if (courseHasFloor(p.x) || courseRun?.support)
+    shadow(x, (courseRun?.support?.y ?? GROUND) + 1, clamp(16 - (GROUND - p.y) / 10, 7, 16));
   const frame = heroFrame(p);
   if (p.dash > 0) {
     const dashFrame = Math.min(7, Math.floor((1 - p.dash / .19) * 8));
@@ -510,7 +505,7 @@ function character() {
   if (near) {
     let action = near.name;
     let key = "↑ ";
-    if (near.type === "scholar") action = targetHere ? near.name + " · 대화" : "대화";
+    if (near.type === "scholar") action = near.name + " · 대화";
     else if (near.room) action += " 입장";
     else if (near.name === "매점") action = "회복";
     else if (near.type === "stair") {
@@ -667,19 +662,24 @@ function miniMap() {
       rect(dx-1,22,3,11,road);
     }
     route();
-    for (const o of objects()) if (o.type === "scholar") {
-      rect(u(o.x)-2,25,5,5,ink);
-      rect(u(o.x)-1,26,3,3,"#ffdb82");
-    }
   } else if (scene.type === "classroom") {
     rect(5,5,w-10,h-11,ink);
     rect(7,7,w-14,h-15,paper);
     rect(u(classroomBoard.x)-15,8,30,4,"#406448");
-    for (let x=30; x<w-20; x+=19) {
-      rect(x,17,10,5,"#a68257");
-      rect(x+3,23,5,2,"#87948b");
+    if (courseRun) {
+      for (const [left,right] of [[0,courseStart],[courseRest.left,courseRest.right],[courseExit,worldWidth]]) {
+        rect(u(left),routeY,u(right)-u(left),3,"#9a7952");
+      }
+      for (const p of courseRun.platforms) {
+        rect(u(p.x-p.w/2),routeY-(GROUND-p.y)*.14,u(p.w)-u(0),2,p.active ? ink : "#b99978");
+      }
+    } else {
+      for (let x=30; x<w-20; x+=19) {
+        rect(x,17,10,5,"#a68257");
+        rect(x+3,23,5,2,"#87948b");
+      }
+      route();
     }
-    route();
   } else {
     rect(6,6,w-12,h-12,ink);
     rect(8,8,w-16,h-16,scene.type === "roof" ? "#a4b0ae" : paper);
@@ -699,13 +699,15 @@ function miniMap() {
   const leg = chooseQuestLeg();
   if (leg) {
     const target = u(leg.point.x);
-    rect(target-1,routeY-15,3,15,"#775425");
-    for (let k=-4; k<=4; k++) rect(target-(4-Math.abs(k)),routeY-14+k,9-2*Math.abs(k),"#835a26");
-    for (let k=-2; k<=2; k++) rect(target-(2-Math.abs(k)),routeY-14+k,5-2*Math.abs(k),"#fff0a0");
+    const markY = courseRun && leg.point.type === "scholar" ? 8 : routeY-14;
+    rect(target-1,markY,3,routeY-markY,"#775425");
+    for (let k=-4; k<=4; k++) rect(target-(4-Math.abs(k)),markY+k,9-2*Math.abs(k),"#835a26");
+    for (let k=-2; k<=2; k++) rect(target-(2-Math.abs(k)),markY+k,5-2*Math.abs(k),"#fff0a0");
   }
-  rect(px-4,routeY-4,9,8,"#183646");
-  rect(px-3,routeY-3,7,6,"#5ddef0");
-  rect(px-1,routeY-2,3,3,"#e9fcff");
+  const py = courseRun ? clamp(routeY-(GROUND-player.y)*.14,5,routeY+4) : routeY;
+  rect(px-4,py-4,9,8,"#183646");
+  rect(px-3,py-3,7,6,"#5ddef0");
+  rect(px-1,py-2,3,3,"#e9fcff");
 }
 function holdDepartureFrame() {
   if (!sceneTransition || sceneTransition.arrived !== null || reducedMotion.matches) return false;
@@ -722,7 +724,7 @@ function revealArrival() {
     sceneTransition.arrived = now;
     let place = floorName(), detail;
     if (scene.type === "classroom") {
-      detail = "본관 " + scene.floor + "층 · 교실";
+      detail = "본관 " + scene.floor + "층 · " + (courseRun?.definition.name || "교실");
     } else if (scene.type === "floor") {
       detail = scene.floor === 1 ? "중앙 현관 · 과학실" : subjects[scene.floor - 2].name + "의 시련";
     } else if (scene.type === "arena") {

@@ -16,6 +16,12 @@ git -C ../pixelfx checkout 5294518ce7c72e48b6100a744596e0acf57f2826
 node art/bake_pixelfx.mjs ../pixelfx
 ```
 
+보스 격파 효과는 별도 시트에 5종·127프레임을 담았습니다. 물리는 전기 고리, 화학은 보랏빛 기포, 생명은 빛나는 꽃과 꽃잎, 지구는 파열된 바닥과 암석, 옥상은 넓게 펼쳐지는 금빛 광선을 사용합니다. 아래 명령으로 격파 시트를 다시 만들고, `victory.js`에서 파편·인장·효과음의 타이밍을 조정할 수 있습니다. [보스 격파 시트](../assets/combat/victory-fx.webp)
+
+```sh
+node art/bake_pixelfx.mjs ../pixelfx --victory
+```
+
 <details>
 <summary>두 원화에 사용한 생성 프롬프트</summary>
 

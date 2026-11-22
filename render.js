@@ -156,6 +156,11 @@ function heroFrame(p) {
   return phase < 0.8 ? 0 : phase < 0.94 ? 1 : phase < 1.65 ? 2 : 3;
 }
 function monsterFrame(e) {
+  if (e.boss && e.dying > 0) {
+    const duration = e.clearDuration;
+    const offset = duration < 1 ? 0 : bossBurstAt - .10;
+    return 8 + clamp(Math.floor((bossClearAge(e) - offset) * 8), 0, 3);
+  }
   if (e.dying > 0)
     return [8, 9, 10, 11][Math.min(3, Math.floor((0.7 - e.dying) * 6))];
   if (e.warn > 0) return (e.boss ? bossWarningProgress(e) < .54 : e.warn > .16) ? 4 : 5;
@@ -537,7 +542,11 @@ function monsters() {
       g.globalAlpha = 1;
     }
     if (e.hit > 0) g.filter = "brightness(1.7)";
-    if (e.dying > 0) g.globalAlpha = Math.min(1, e.dying * 5);
+    if (e.dying > 0) {
+      g.globalAlpha = e.boss && e.clearDuration > 1
+        ? clamp(1 - (bossClearAge(e) - bossBurstAt) / .43, 0, 1)
+        : Math.min(1, e.dying * 5);
+    }
     drawActor("foe" + e.kind, monsterFrame(e), x, e.y + bob, h, e.dir > 0);
     g.globalAlpha = 1;
     g.filter = "none";
@@ -734,11 +743,14 @@ function render() {
   else if (scene.type === "floor") hall(depth);
   else if (scene.type === "classroom") classroomInterior(depth);
   else if (!depth) battleBack();
+  const defeated = foes.find(e => e.boss && e.dying);
+  if (defeated) drawBossClearBack(defeated);
   drawCombatGround();
   monsters();
   chooseQuestLeg();
   character();
   particles();
+  if (defeated) drawBossClearFront(defeated);
   drawQuestArrow(player.x - cam);
   g.restore();
   ink.restore();

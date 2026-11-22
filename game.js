@@ -76,6 +76,10 @@ function stairX(type, side) {
 function cameraTarget() {
   if (scene.type === "classroom" && W > worldWidth) return (worldWidth - W) / 2;
   const boss = foes.find(e => e.boss);
+  if (boss?.dying && !reducedMotion.matches) {
+    const focus = Math.abs(player.x - boss.x) < W * .88 ? (player.x + boss.x) / 2 : boss.x;
+    return clamp(focus - W * .5, 0, Math.max(0, worldWidth - W));
+  }
   if (boss && W < 410 && Math.abs(player.x - boss.x) < W * .78)
     return clamp((player.x + boss.x) / 2 - W / 2, 0, Math.max(0, worldWidth - W));
   return clamp(player.x - W * .42, 0, Math.max(0, worldWidth - W));
@@ -87,6 +91,8 @@ assets.combat = new Image();
 assets.combat.src = "assets/combat/effects.webp";
 assets.spellFX = new Image();
 assets.spellFX.src = "assets/combat/pixelfx.webp";
+assets.victoryFX = new Image();
+assets.victoryFX.src = "assets/combat/victory-fx.webp";
 let panelSince = 0;
 let returnFocus = null;
 let saveMessage = "자동 저장";
@@ -310,7 +316,7 @@ function statusBars() {
   }
   const b = foes.find((e) => e.boss);
   const meter = $("boss-meter");
-  meter.hidden = !b;
+  meter.hidden = !b || b.dying > 0;
   const warning = b?.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint : "";
   if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
   if (b) {
@@ -1039,17 +1045,13 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
     playEffect("phase");
   }
   if (e.hp <= 0) {
-    e.dying = 0.7;
     e.warn = 0;
     e.action = 0;
-    combatEvent("defeat", e.x, chest, .68, { kind: e.kind, boss: e.boss, scale: e.boss ? e.height / 110 : .62 });
     if (e.boss) {
-      shots = [];
-      bossZones.length = 0;
-      e.rush = null;
-      player.celebrate = 0.7;
-      player.inv = 0.75;
+      beginBossClear(e);
     } else {
+      e.dying = .7;
+      combatEvent("defeat", e.x, chest, .68);
       mp = Math.min(60, mp + 7);
       playEffect("defeat");
     }
@@ -1100,7 +1102,7 @@ function spark(x, y, color, num = 10) {
     });
 }
 function attack() {
-  if (player.attackCD > 0 || modal) return;
+  if (player.attackCD > 0 || modal || foes.some(e => e.boss && e.dying)) return;
   player.attackCD = 0.34;
   player.swing = 0.2;
   combatEvent("slash", player.x, player.y - 29, .24, { dir: player.face });
@@ -1114,7 +1116,7 @@ function attack() {
       hitFoe(e, 16);
 }
 function cast(slot) {
-  if (modal) return;
+  if (modal || foes.some(e => e.boss && e.dying)) return;
   let id = progress.slots[slot];
   if (id == null) {
     notify("학자의 시련으로 스킬을 배우고 K에서 배치하세요.");
@@ -1293,6 +1295,7 @@ function step(dt) {
   for (let e of [...foes]) {
     if (e.dying) {
       e.dying = Math.max(0, e.dying - dt);
+      if (e.boss) advanceBossClear(e, dt);
       if (!e.dying) {
         foes = foes.filter((f) => f !== e);
         if (e.boss) {
@@ -1607,8 +1610,8 @@ if (resumeFoe) {
   if (boss && Number.isFinite(resumeFoe.hp) && Number.isFinite(resumeFoe.x)) {
     const savedMax = resumeFoe.max > 0 ? resumeFoe.max : bossStats[boss.kind].oldHp;
     boss.hp = clamp(resumeFoe.hp / savedMax, 0, 1) * boss.max;
-    if (!boss.hp) boss.dying = 0.35;
     boss.x = clamp(resumeFoe.x, boss.half, worldWidth - boss.half);
+    if (!boss.hp) beginBossClear(boss);
   }
   resumeFoe = null;
 }

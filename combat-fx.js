@@ -29,8 +29,10 @@ const scholarWakes = ["apple", "orbit", "bubbles", "prism", "vine", "wings"];
 
 // The atlas keeps the pivot of each simulation. A narrow particle cell can have its pivot outside the cell.
 function spellClip(name, t, x, y, scale = 1, alpha = 1, flip = false) {
-  if (!assets.spellFX.naturalWidth || alpha <= 0) return;
-  const [row, w, h, px, py, cols, frames] = spellClips[name];
+  const victory = Object.hasOwn(victoryClips, name);
+  const sheet = victory ? assets.victoryFX : assets.spellFX;
+  if (!sheet.naturalWidth || alpha <= 0) return;
+  const [row, w, h, px, py, cols, frames] = (victory ? victoryClips : spellClips)[name];
   const pose = reducedMotion.matches ? .29 : clamp(t, 0, 1);
   const i = Math.min(frames - 1, Math.floor(pose * frames));
   const left = x - (flip ? w - px : px) * scale;
@@ -39,7 +41,7 @@ function spellClip(name, t, x, y, scale = 1, alpha = 1, flip = false) {
   g.globalAlpha *= Math.min(1, alpha);
   g.translate(Math.round(x), Math.round(y));
   if (flip) g.scale(-1, 1);
-  g.drawImage(assets.spellFX, (i % cols) * w, row + Math.floor(i / cols) * h, w, h,
+  g.drawImage(sheet, (i % cols) * w, row + Math.floor(i / cols) * h, w, h,
     -Math.round(px * scale), -Math.round(py * scale), Math.round(w * scale), Math.round(h * scale));
   g.restore();
 }
@@ -572,11 +574,7 @@ function drawCombatAccent(e) {
     }
     if (!reducedMotion.matches) splinters(x, y, t, scale * 75, color, 8);
   } else if (e.type === "defeat") {
-    const color = subjects[e.kind]?.color || "#edc878",
-      scale = e.scale;
-    if (e.boss) combatSprite(FX_RIFT, frame, x, y, scale * (0.46 + 0.55 * t), false, 0.67 * fade);
-    if (e.boss) spellClip(e.kind === 4 ? "riftBurst" : bossHits[e.kind], t, x, y + (e.kind === 4 ? 0 : 23), e.kind === 4 ? 1.45 : 1.02, fade);
-    combatSprite(FX_BURST, frame, x, y, scale, false, fade);
-    if (!reducedMotion.matches) splinters(x, y, t, scale * 85, color, e.boss ? 18 : 8);
+    combatSprite(FX_BURST, frame, x, y, .62, false, fade);
+    if (!reducedMotion.matches) splinters(x, y, t, 53, "#edc878", 8);
   }
 }

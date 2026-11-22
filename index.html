@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
-    <link rel="stylesheet" href="style.css?v=quests1">
+    <link rel="stylesheet" href="style.css?v=quest-light">
   </head>
   <body>
     <main id="shell">
@@ -20,11 +20,18 @@
           <div class="arrival-sign"><strong id="arrival-place"></strong><span id="arrival-detail"></span></div>
         </div>
         <div id="quest-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
-          <div class="quest-ribbon"><i data-icon="quest"></i><strong id="qn-status"></strong><span id="qn-finished"></span></div>
-          <div class="quest-preview"><img id="qn-portrait" src="assets/hero.png" alt=""><div>
-            <small id="qn-caption"></small><strong id="qn-title"></strong><p id="qn-detail"></p>
-          </div></div>
-          <div class="notice-destination"><span>목적지</span><b id="qn-place"></b></div>
+          <div class="quest-fanfare">
+            <div class="fanfare-heading"><strong id="qn-status"></strong></div>
+            <span id="qn-finished"></span>
+          </div>
+          <div class="quest-next">
+            <div class="quest-next-heading">
+              <img id="qn-portrait" src="assets/hero.png" alt="">
+              <div><small id="qn-caption"></small><strong id="qn-title"></strong></div>
+            </div>
+            <p id="qn-detail"></p>
+            <p class="notice-destination"><span>목적지</span> <b id="qn-place"></b></p>
+          </div>
         </div>
         <div class="hud-top">
           <div class="map-window">
@@ -75,7 +82,7 @@
     <script src="icons.js"></script>
     <script src="actor-sheets.js"></script>
     <script src="assets/combat/pixelfx.js"></script>
-    <script src="quests.js?v=quests1"></script>
+    <script src="quests.js?v=quest-light"></script>
     <script src="game.js?v=quests1"></script>
     <script src="assets/world/atlas.js"></script>
     <script src="assets/world/fixtures.js"></script>

@@ -109,11 +109,12 @@ function resetQuestNotices() {
   $("quest-notice").hidden = true;
 }
 function advanceQuestNotice(dt) {
-  const card = $("quest-notice");
-  if (modal || sceneTransition || document.hidden) { card.hidden = true; return; }
+  const notice = $("quest-notice");
+  if (modal || sceneTransition || document.hidden) { notice.hidden = true; return; }
   if (!shownNotice && questNotices.length) {
     shownNotice = questNotices.shift();
     const {completed, next} = shownNotice;
+    notice.dataset.event = completed ? "complete" : "start";
     $("qn-status").textContent = completed ? "퀘스트 완료" : "새 퀘스트";
     $("qn-finished").textContent = completed?.title || "";
     $("qn-caption").textContent = completed ? (next === epilogue ? "모험 완료 · 자유 탐험" : "다음 퀘스트") : next.chapter;
@@ -123,7 +124,7 @@ function advanceQuestNotice(dt) {
     $("qn-portrait").src = "assets/" + next.art + ".png";
   }
   if (!shownNotice) return;
-  card.hidden = false;
+  notice.hidden = false;
   shownNotice.remaining -= dt;
-  if (shownNotice.remaining <= 0) { card.hidden = true; shownNotice = null; }
+  if (shownNotice.remaining <= 0) { notice.hidden = true; shownNotice = null; }
 }

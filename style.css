@@ -49,6 +49,7 @@ kbd {
   position: relative; isolation: isolate; display: grid; grid-template-rows: minmax(0,1fr) auto;
   width: 100%; height: 100vh; height: 100dvh; overflow: hidden; background: var(--ink);
 }
+#shell:has(> #bossbar:not([hidden])) { grid-template-rows: minmax(0,1fr) auto auto; }
 #stage { position: relative; min-height: 0; overflow: hidden; background: #839f92; }
 #map-depth { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #world { position: relative; display: block; width: 100%; height: 100%; outline: none; }
@@ -80,7 +81,7 @@ kbd {
   align-items: start; column-gap: 10px; pointer-events: none;
 }
 .hud-top > * { pointer-events: auto; }
-.map-window, .field-tools button, #bossbar {
+.map-window, .field-tools button {
   color: var(--cream); background: var(--cover); border: 1px solid var(--rim);
   box-shadow: 0 2px 5px #15234055;
 }
@@ -169,17 +170,38 @@ kbd {
 }
 #menu { flex: none; padding: 0 7px 0 2px; gap: 3px; font-size: 11px; }
 #menu i { width: 28px; height: 28px; }
-#bossbar { grid-area: 1 / 2; display: flex; align-items: start; gap: 8px; width: clamp(210px,31vw,440px); padding: 6px 10px; background: #162339ed; }
-.boss-info { min-width: 0; flex: 1; }
-#bossbar > i { width: 20px; height: 20px; }
-.boss-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-#bossbar b { font-size: 13px; }
-#bossphase { color: #f6d998; font-size: 11px; white-space: nowrap; }
-.boss-track, #bossfill { display: block; height: 5px; }
-.boss-track { margin: 5px 0 2px; background: #342738; }
-#bossfill { background: linear-gradient(90deg,#b55c82,#f5af8e); }
-#boss-warning { font-size: 12px; line-height: 1.45; margin-top: 4px; color: #ffe4a9; word-break: keep-all; }
-#boss-warning:empty { display: none; }
+#bossbar {
+  --boss-health: 100%;
+  --boss-gutter: max(clamp(21px,7vw,115px),env(safe-area-inset-left),env(safe-area-inset-right));
+  display: grid; grid-template-rows: auto auto 1.45em; gap: 4px;
+  padding: 5px var(--boss-gutter) 3px;
+  color: #fff2da; background: linear-gradient(90deg,#171921,#21222a 48%,#171921);
+}
+#bossbar > * { width: min(100%,1360px); margin-inline: auto; }
+.boss-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+#bossname { font-size: clamp(15px,1.6vw,21px); font-weight: normal; line-height: 1.25; }
+#bossphase { color: #ecd29b; font-size: 12px; white-space: nowrap; }
+.boss-track {
+  position: relative; height: 10px;
+  border-block: 1px solid #c0a676; background: #33242b;
+}
+.boss-track::before, .boss-track::after {
+  content: ""; position: absolute; z-index: 1; top: -1px;
+  width: 11px; height: 10px; background: #c0a676;
+  clip-path: polygon(0 50%, 28% 20%, 72% 20%, 100% 50%, 72% 80%, 28% 80%);
+}
+.boss-track::before { left: -8px; }
+.boss-track::after { right: -8px; }
+#bossfill, #boss-trail { position: absolute; inset: 0 auto 0 0; width: var(--boss-health); }
+#bossfill {
+  background: linear-gradient(#dfa58b 0 1px,#b24740 1px,#7e3037);
+  transition: width .13s ease-out;
+}
+#boss-trail { background: #ddb17a; transition: width .42s .13s ease-out; }
+#boss-warning {
+  font-size: clamp(11px,1.1vw,14px); line-height: 1.45;
+  color: #ffe4ad; text-align: center; word-break: keep-all; overflow-wrap: anywhere;
+}
 #toast {
   position: absolute; top: 16%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 90%;
   color: var(--cream); background: #152740b8; padding: 6px 15px; font-size: 12px;
@@ -406,8 +428,7 @@ kbd {
   .field-tools { display: contents; }
   #menu { grid-area: 1 / 2; justify-self: end; }
   #quest { grid-area: 2 / 1 / 3 / -1; justify-self: end; width: min(260px,82%); gap: 2px; padding: 6px 10px; }
-  #bossbar { grid-area: 2 / 1 / 3 / -1; justify-self: center; width: min(300px,94%); }
-  .hud-top:has(#bossbar:not([hidden])) #quest { grid-row: 3; }
+  #bossbar { grid-template-rows: auto auto calc(2 * 1.45 * 11px); }
   #quest-notice { top: max(29%,172px); }
   .dock { padding-inline: max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right)); }
   .field-badge, .school-name, .edit { display: none; }
@@ -481,6 +502,12 @@ kbd {
   .quest-next { margin: 0; text-align: left; }
   .quest-next-heading { justify-content: start; }
   #qn-detail { margin-inline: 0; line-height: 1.35; }
+}
+@media (orientation: landscape) and (max-height: 530px) {
+  #bossbar { padding-block: 4px 2px; gap: 2px; grid-template-rows: auto auto 1.45em; }
+  #bossname { font-size: 15px; }
+  .boss-track { height: 7px; }
+  .boss-track::before, .boss-track::after { height: 7px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

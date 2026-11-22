@@ -94,13 +94,13 @@ function spellWake(s) {
 }
 
 function bossCharge(e) {
-  const id = attackPattern(e), t = clamp(1 - e.warn / .85, 0, 1);
-  const x = e.x - cam, dir = player.x >= e.x ? 1 : -1;
+  const id = e.plan.move.id, t = bossWarningProgress(e);
+  const x = e.x - cam, dir = e.plan.dir, scale = e.height / 116;
   const still = reducedMotion.matches;
-  if (e.kind === 4) spellClip("riftCharge", t, x + dir * 54, e.y - 80, .95, .92);
+  if (e.kind === 4) spellClip("riftCharge", t, x + dir * 66, e.y - e.height * .62, 1.17, .92);
   // Collect small copies of the actual attack core around the hand just before release.
-  const handX = x + dir * 42, handY = e.y - (id === 2 ? 15 : 46);
-  combatSprite(8 + id, still ? 2 : Math.floor(t * 8), handX, handY, .22 + .28 * t, dir < 0, .52 + .42 * t);
+  const handX = x + dir * e.half * .72, handY = e.y - (id === 2 ? 18 : e.height * .40);
+  combatSprite(8 + id, still ? 2 : Math.floor(t * 8), handX, handY, scale * (.22 + .28 * t), dir < 0, .52 + .42 * t);
   if (still) return;
   for (let i = 0; i < 6; i++) {
     const a = i * Math.PI / 3 + t * 2, dist = 9 + 28 * (1 - t);
@@ -233,50 +233,101 @@ function entranceLight(x, y, time) {
 }
 
 function warningPath(e) {
-  const id = attackPattern(e),
-    x = e.x - cam,
-    t = 1 - e.warn / 0.85;
-  const color = e.kind === 4 ? "#edb0ff" : subjects[id].color;
-  if (id === 1 || id === 3) {
-    const offsets = id === 3 ? [-51, 0, 51] : [0];
-    for (const offset of offsets) warningMark(e.markedX - cam + offset, t, color);
-  } else {
-    const dir = player.x >= e.x ? 1 : -1,
-      y = GROUND - (id === 2 ? 10 : 29);
-    g.save();
-    g.globalAlpha = 0.55 + 0.2 * t;
-    const start = x + dir * 28;
-    fxLine(
-      [
-        [start, y],
-        [start + dir * 125, y],
-      ],
-      "#44334c",
-      3,
-    );
-    fxLine(
-      [
-        [start, y],
-        [start + dir * 125, y],
-      ],
-      color,
-      1,
-    );
-    for (let i = 0; i < 3; i++) {
-      const px = start + dir * (31 + i * 36 + (reducedMotion.matches ? 0 : t * 10));
-      fxLine(
-        [
-          [px - dir * 5, y - 4],
-          [px, y],
-          [px - dir * 5, y + 4],
-        ],
-        color,
-        2,
-      );
-    }
-    fxArc(start, y, 10 + t * 5, 14 + t * 5, color);
-    g.restore();
+  const { move, dir, start, end, strikes } = e.plan;
+  const color = e.kind === 4 ? "#edadff" : subjects[move.id].color;
+  const t = bossWarningProgress(e);
+  for (const zone of strikes) drawBossZone({ ...zone, id: move.id, rift: e.kind === 4 }, true, t);
+  if (move.dash) {
+    warningLane(start - cam - dir * e.half * .56, end - cam + dir * e.half * .56, GROUND - 18, color, t);
+    return;
   }
+  const lanes = new Set();
+  for (const shot of move.bolts || []) {
+    const aim = shot.reverse ? -dir : dir;
+    const key = shot.height * aim;
+    if (lanes.has(key)) continue;
+    lanes.add(key);
+    const x = e.x + aim * e.half * .72;
+    warningLane(x - cam, (aim < 0 ? 0 : worldWidth) - cam, GROUND - shot.height, color, t);
+  }
+}
+
+function warningLane(from, to, y, color, t) {
+  const side = Math.sign(to - from);
+  const first = Math.max(-14, Math.min(from, to));
+  const last = Math.min(W + 14, Math.max(from, to));
+  if (!side || first >= last) return;
+  g.save();
+  g.globalAlpha = .61 + t * .2;
+  r(first, y - 14, last - first, 29, "#7c3b4938");
+  fxLine([[first, y], [last, y]], "#402535", 5);
+  fxLine([[first, y], [last, y]], color, 2);
+  for (let x = first + 19; x < last - 7; x += 42) {
+    const px = x + (reducedMotion.matches ? 0 : side * t * 10);
+    const arrow = [[px - side * 6, y - 5], [px, y], [px - side * 6, y + 5]];
+    fxLine(arrow, "#251e31", 5);
+    fxLine(arrow, "#fff0c1", 2);
+  }
+  g.restore();
+}
+
+function drawBossZone(zone, warning, t) {
+  const x = zone.x - cam, y = GROUND, width = zone.radius * 2;
+  if (x + zone.radius < -10 || x - zone.radius > W + 10) return;
+  const left = x - zone.radius, right = x + zone.radius, top = y - zone.height;
+  const color = zone.rift ? "#e493ff" : subjects[zone.id].color;
+  g.save();
+  if (warning) {
+    r(left, top, width, zone.height, "#e5686235");
+    r(left, top, 1, zone.height, "#f3a68d");
+    r(right - 1, top, 1, zone.height, "#f3a68d");
+    r(left, y - 9, width, 10, "#612b3c");
+    for (let dx = 2; dx < width - 2; dx += 9) r(left + dx, y - 6, 5, 3, "#ffb28e");
+    if (zone.height > 45) {
+      warningMark(x, t, color);
+      const arrow = [[x - 6, top + 8], [x, top + 15], [x + 6, top + 8]];
+      fxLine(arrow, "#41283d", 5);
+      fxLine(arrow, "#ffe0b7", 2);
+    }
+    if ((zone.id === 1 || zone.id === 3) && zone.height > 100 && t > .65) {
+      const falling = (t - .65) / .35;
+      const targetY = reducedMotion.matches ? top + 14 : top + (zone.height - 15) * falling ** 2;
+      combatSprite(8 + zone.id, 2, x, targetY, .66 + zone.radius / 200, false, .62);
+    }
+    g.restore();
+    return;
+  }
+  const age = zone.timer;
+  const impact = clamp(age / .24, 0, 1);
+  const fade = Math.min(1, (zone.linger - age) * 9);
+  if (zone.height > 42) {
+    g.globalAlpha = fade * .27;
+    r(left, top, width, zone.height, color);
+    g.globalAlpha = fade * .9;
+    // The column's edges are the hit edges. The drawn matter inside varies by subject.
+    r(left, top, 3, zone.height, color);
+    r(right - 3, top, 3, zone.height, color);
+    for (let i = 0; i < 4; i++) {
+      const cx = left + (i + .5) * width / 4;
+      const cy = top + ((i * 43 + (reducedMotion.matches ? 12 : impact * 90)) % zone.height);
+      combatSprite(8 + zone.id, 3 + i, cx, cy, .64 + zone.radius / 180, i % 2 > 0, .88);
+    }
+    spellClip(bossHits[zone.id], impact, x, y - zone.height * (zone.id === 2 ? .17 : .42), Math.min(1.3, .68 + zone.radius / 168), .67);
+  } else {
+    g.globalAlpha = fade * .54;
+    r(left, top, width, zone.height, color);
+    for (let i = 0; i < width; i += 18) {
+      const rise = 7 + (i * 13 % 15);
+      if (zone.id === 1) fxArc(left + i, y - 6 - rise / 3, 4, 3 + rise / 6, color);
+      else path([[left + i, y - 3], [left + i + 3, y - rise], [left + i + 8, y - 8]], color);
+    }
+  }
+  g.globalAlpha = fade;
+  r(left, y - 4, width, 4, color);
+  const release = zone.rift ? "riftBurst" : bossHits[zone.id];
+  spellClip(release, impact, x, y - 4, Math.min(1.65, .7 + zone.radius / 120), fade);
+  if (!reducedMotion.matches && age < .3) splinters(x, y - 9, impact, zone.radius, color, 12);
+  g.restore();
 }
 
 function groundWave(e, x, y, t) {
@@ -356,11 +407,21 @@ function drawCombatGround() {
     if (e.type === "wave") groundWave(e, x, y, t);
     if (e.type === "bossRelease") {
       const flip = e.dir < 0, alpha = Math.min(1, e.life * 6);
-      if (e.rift) spellClip("riftBurst", t * .7, x, y - 70, .68, alpha * .8);
-      spellClip(disciplineSeals[e.id], .48 + .5 * t, x, y, 1 + .24 * t, alpha * .78);
+      if (e.rift) spellClip("riftBurst", t * .7, x, y - 95, .7 * e.scale, alpha * .8);
+      spellClip(disciplineSeals[e.id], .48 + .5 * t, x, y, e.scale + .24 * t, alpha * .78);
       // Recoil happens at the caster. Falling attacks keep a separate marker at the landing site.
       if (!reducedMotion.matches) splinters(x + e.dir * 27, y - (e.id === 2 ? 15 : 46), t, 48, subjects[e.id].color);
       if (e.id === 0) spellClip("space", t, x + e.dir * 34, y - 30, .72, alpha, flip);
+    }
+    if (e.type === "bossPhaseShift") {
+      const color = subjects[e.kind].color;
+      const crest = y - e.height * .45;
+      g.save();
+      g.globalAlpha = .77 * (1 - t);
+      fxArc(x, crest, 39 + t * 142, 24 + t * 78, color, 0, Math.PI * 2, 3);
+      fxArc(x, crest, 31 + t * 111, 17 + t * 59, "#fff1d3");
+      if (!reducedMotion.matches) splinters(x, crest, t, 147, color, 20);
+      g.restore();
     }
     if (e.type === "discovery") {
       const lift = 20 * (1 - (1 - t) ** 2), opacity = Math.min(1, (1 - t) * 3);
@@ -424,8 +485,8 @@ function drawCombatGround() {
     }
   }
   for (const e of foes) if (e.boss && e.warn > 0) {
-    const t = 1 - e.warn / .85;
-    spellClip(disciplineSeals[attackPattern(e)], t, e.x - cam, e.y - 2, .72 + t * .28, .5 + .35 * t);
+    const t = bossWarningProgress(e);
+    spellClip(disciplineSeals[e.plan.move.id], t, e.x - cam, e.y - 2, e.height / 145 + t * .28, .5 + .35 * t);
   }
 }
 
@@ -438,7 +499,7 @@ function drawCombatShot(s) {
   if (x < -170 || x > W + 170) return;
   if (s.team) {
     if (s.rift) combatSprite(FX_RIFT, frame, x, y, s.id === 1 || s.id === 3 ? 0.51 : 0.6, false, 0.65);
-    combatSprite(8 + s.id, frame, x, y, 1, s.vx < 0);
+    combatSprite(8 + s.id, frame, x, y, s.scale ?? 1, s.vx < 0);
     return;
   }
   const flip = s.vx ? s.vx < 0 : !s.area && s.dir < 0;
@@ -512,7 +573,7 @@ function drawCombatAccent(e) {
     if (!reducedMotion.matches) splinters(x, y, t, scale * 75, color, 8);
   } else if (e.type === "defeat") {
     const color = subjects[e.kind]?.color || "#edc878",
-      scale = e.boss ? 1.45 : 0.62;
+      scale = e.scale;
     if (e.boss) combatSprite(FX_RIFT, frame, x, y, scale * (0.46 + 0.55 * t), false, 0.67 * fade);
     if (e.boss) spellClip(e.kind === 4 ? "riftBurst" : bossHits[e.kind], t, x, y + (e.kind === 4 ? 0 : 23), e.kind === 4 ? 1.45 : 1.02, fade);
     combatSprite(FX_BURST, frame, x, y, scale, false, fade);

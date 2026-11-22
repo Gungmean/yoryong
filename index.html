@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
-    <link rel="stylesheet" href="style.css?v=quest-contrast">
+    <link rel="stylesheet" href="style.css?v=giants">
   </head>
   <body>
     <main id="shell">
@@ -43,7 +43,11 @@
             </div>
             <canvas width="176" height="48" id="mapview" aria-hidden="true"></canvas>
           </div>
-          <div id="bossbar" hidden><i data-icon="rift"></i><span><b id="bossname"></b><span class="boss-track"><i id="bossfill"></i></span></span></div>
+          <div id="bossbar" hidden><i data-icon="rift"></i><div class="boss-info">
+            <div class="boss-heading"><b id="bossname"></b><span id="bossphase"></span></div>
+            <span class="boss-track"><i id="bossfill"></i></span>
+            <p id="boss-warning"></p>
+          </div></div>
           <nav class="field-tools" aria-label="모험 정보">
             <button id="quest" aria-haspopup="dialog" aria-keyshortcuts="J" aria-describedby="qaction"><span class="quest-heading"><i data-icon="quest"></i><small id="qchapter"></small><kbd>J</kbd></span>
               <strong id="qtitle"></strong><span id="qaction"></span></button>
@@ -77,19 +81,20 @@
     </main>
     <audio id="campus-music" preload="none" loop></audio>
     <audio id="battle-music" preload="none" loop></audio>
-    <script src="data.js?v=rooms1"></script>
+    <script src="data.js?v=giants"></script>
     <script src="assets/world/classrooms.js"></script>
     <script src="icons.js"></script>
     <script src="actor-sheets.js"></script>
     <script src="assets/combat/pixelfx.js"></script>
     <script src="quests.js?v=quest-light"></script>
-    <script src="game.js?v=quests1"></script>
+    <script src="bosses.js?v=giants"></script>
+    <script src="game.js?v=giants"></script>
     <script src="assets/world/atlas.js"></script>
     <script src="assets/world/fixtures.js"></script>
     <script src="scenery.js?v=campus2"></script>
     <script src="vendor/three-r187.min.js"></script>
-    <script src="map3d.js?v=campus2"></script>
-    <script src="combat-fx.js?v=pixelfx1"></script>
-    <script src="render.js?v=quests1"></script>
+    <script src="map3d.js?v=giants"></script>
+    <script src="combat-fx.js?v=giants"></script>
+    <script src="render.js?v=giants"></script>
   </body>
 </html>

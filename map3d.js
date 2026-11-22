@@ -825,7 +825,7 @@ const campusWorld = (() => {
       const boss = foes.find((e) => e.boss),
         seals = progress.cleared.length;
       const warning =
-        !sceneryPaused && !reducedMotion.matches && boss?.warn > 0 ? 1 - Math.min(1, boss.warn / 0.85) : 0;
+        !sceneryPaused && !reducedMotion.matches && boss ? bossWarningProgress(boss) : 0;
       if (
         lastTime === sceneryTime &&
         lastCameraX === cx &&

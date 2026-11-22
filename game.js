@@ -76,6 +76,9 @@ function stairX(type, side) {
 }
 function cameraTarget() {
   if (scene.type === "classroom" && W > worldWidth) return (worldWidth - W) / 2;
+  const boss = foes.find(e => e.boss);
+  if (boss && W < 410 && Math.abs(player.x - boss.x) < W * .78)
+    return clamp((player.x + boss.x) / 2 - W / 2, 0, Math.max(0, worldWidth - W));
   return clamp(player.x - W * .42, 0, Math.max(0, worldWidth - W));
 }
 const assets = {};
@@ -217,7 +220,7 @@ function save() {
     if (parseSave(localStorage.getItem(SAVE))?.generation > runGeneration) return;
     const boss = foes.find((e) => e.boss);
     const encounter =
-      boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp } : null;
+      boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max } : null;
     localStorage.setItem(
       SAVE,
       JSON.stringify({
@@ -334,6 +337,8 @@ function statusBars() {
   $("bossbar").hidden = !b;
   if (b) {
     $("bossname").textContent = subjects[b.kind].boss;
+    $("bossphase").textContent = bossPhase(b) + " / 2단계";
+    $("boss-warning").textContent = b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint : "";
     $("bossfill").style.width = (100 * b.hp) / b.max + "%";
   }
   document.querySelectorAll(".slot .timer").forEach((el, i) => {
@@ -878,17 +883,20 @@ function bubble(t) {
   });
 }
 function enemy(x, kind, boss = false) {
-  let health = boss ? (kind === 4 ? 345 : 160 + kind * 18) : 34;
+  const stats = bossStats[kind];
+  const health = boss ? stats.hp : 34;
   return {
     x,
     y: GROUND,
     kind,
     boss,
+    height: boss ? stats.height : 27,
+    half: boss ? stats.half : 18,
     hp: health,
     max: health,
     time: 1.8,
     warn: 0,
-    markedX: x,
+    bolts: [],
     step: 0,
     hit: 0,
     action: 0,
@@ -953,6 +961,7 @@ function setScene() {
   });
   cam = cameraTarget();
   shots = [];
+  bossZones.length = 0;
   effects = [];
   texts = [];
   foes = [];
@@ -961,7 +970,7 @@ function setScene() {
   if (scene.type === "floor" && scene.floor >= 2)
     foes = [enemy(440, 5), enemy(1840, 5)];
   if (scene.type === "arena" || (scene.type === "roof" && !progress.won))
-    foes = [enemy(650, scene.subject, true)];
+    foes = [enemy(scene.type === "roof" ? 638 : 603, scene.subject, true)];
   near = findNear();
   refresh();
   syncMusic();
@@ -1044,22 +1053,31 @@ function winBoss(i) {
 }
 function hitFoe(e, n, skill = -1, dir = player.face) {
   if (e.dying || !foes.includes(e)) return;
+  const wasAboveHalf = e.boss && bossPhase(e) === 1;
   e.hp = Math.max(0, e.hp - n);
   e.hit = 0.19;
-  texts.push({ x: e.x, y: e.y - (e.boss ? 83 : 34), n, life: 0.68 });
-  spark(e.x, e.y - 28, "#ffe39b", 8);
+  const chest = e.y - (e.boss ? e.height * .42 : 20);
+  texts.push({ x: e.x, y: chest - (e.boss ? 33 : 14), n, life: 0.68 });
+  spark(e.x, chest - 8, "#ffe39b", 8);
   if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.id === skill && fx.max - fx.life < .065)) {
-    combatEvent("impact", e.x, e.y - (e.boss ? 39 : 20), .36, { id: skill, dir, target: e });
+    combatEvent("impact", e.x, chest, .36, { id: skill, dir, target: e });
     if (!reducedMotion.matches) contactPause = Math.max(contactPause, e.hp === 0 && e.boss ? .05 : 1 / 60);
   }
   shake = Math.max(shake, 2);
+  if (wasAboveHalf && e.hp > 0 && bossPhase(e) === 2) {
+    combatEvent("bossPhaseShift", e.x, e.y, .8, { kind: e.kind, height: e.height });
+    if (!reducedMotion.matches) shake = Math.max(shake, 8);
+    tone(105, .32, "triangle");
+  }
   if (e.hp <= 0) {
     e.dying = 0.7;
     e.warn = 0;
     e.action = 0;
-    combatEvent("defeat", e.x, e.y - (e.boss ? 48 : 15), .68, { kind: e.kind, boss: e.boss });
+    combatEvent("defeat", e.x, chest, .68, { kind: e.kind, boss: e.boss, scale: e.boss ? e.height / 110 : .62 });
     if (e.boss) {
       shots = [];
+      bossZones.length = 0;
+      e.rush = null;
       player.celebrate = 0.7;
       player.inv = 0.75;
     } else {
@@ -1120,9 +1138,9 @@ function attack() {
   tone(260, 0.075, "triangle");
   for (const e of [...foes])
     if (
-      (e.x - player.x) * player.face >= -19 &&
-      (e.x - player.x) * player.face < 100 &&
-      Math.abs(e.y - player.y) < 90
+      (e.x - player.x) * player.face >= -19 - (e.boss ? e.half : 0) &&
+      (e.x - player.x) * player.face < (e.boss ? 64 + e.half : 100) &&
+      Math.abs(e.y - player.y) < (e.boss ? e.height : 90)
     )
       hitFoe(e, 16);
 }
@@ -1221,42 +1239,6 @@ function cast(slot) {
   }
   statusBars();
 }
-function attackPattern(e) {
-  return e.kind === 4 ? e.step % 4 : e.kind;
-}
-function enemyShot(e) {
-  e.action = 0.38;
-  const k = attackPattern(e);
-  if (e.kind === 4) e.step++;
-  let dir = player.x >= e.x ? 1 : -1;
-  combatEvent("bossRelease", e.x, e.y, .38, { id: k, dir, rift: e.kind === 4 });
-  if (k === 1 || k === 3) {
-    for (let n = 0; n < (k === 3 ? 3 : 1); n++)
-      shots.push({
-        team: 1,
-        rift: e.kind === 4,
-        id: k,
-        x: e.markedX + (k === 3 ? (n - 1) * 51 : 0),
-        y: GROUND - 205 - n * 13,
-        vx: 0,
-        vy: 158 + n * 7,
-        life: 2,
-        dmg: 12,
-      });
-  } else
-    shots.push({
-      team: 1,
-      rift: e.kind === 4,
-      id: k,
-      x: e.x + dir * 28,
-      y: GROUND - (k === 2 ? 10 : 29),
-      vx: dir * (k === 2 ? 186 : 162),
-      vy: 0,
-      life: 4,
-      dmg: e.kind === 4 ? 16 : 12,
-    });
-  tone(160, 0.09, "triangle");
-}
 function step(dt) {
   if (modal) return;
   if (contactPause > 0) {
@@ -1347,29 +1329,15 @@ function step(dt) {
     e.slow = Math.max(0, e.slow - dt);
     const dist = p.x - e.x,
       d = Math.sign(dist) || 1;
-    e.dir = d;
     if (!e.boss) {
+      e.dir = d;
       if (e.slow <= 0) {
         if (Math.abs(dist) < 186 && Math.abs(p.x - e.home) < 245)
           e.x += d * dt * 31;
         else e.x += (e.home + Math.sin(clock * 0.9 + e.home) * 36 - e.x) * dt;
       }
       e.y = GROUND - Math.abs(Math.sin(clock * 3 + e.home)) * 5;
-    } else {
-      if (!e.warn && Math.abs(dist) > 69 && e.slow <= 0)
-        e.x += d * (e.kind === 4 ? 42 : 29) * dt;
-      if (e.warn > 0) {
-        e.warn -= dt;
-        if (e.warn <= 0) {
-          e.warn = 0;
-          enemyShot(e);
-          e.time = e.kind === 4 ? 1.45 : 2.15;
-        }
-      } else if ((e.time -= dt) <= 0) {
-        e.warn = 0.85;
-        e.markedX = p.x;
-      }
-    }
+    } else stepBoss(e, dt);
     e.moving = Math.abs(previousX - e.x) > 0.04;
     if (!e.boss) {
       e.time -= dt;
@@ -1381,9 +1349,11 @@ function step(dt) {
         }
       } else if (Math.abs(dist) < 55 && e.time <= 0) e.warn = 0.32;
     }
-    if (Math.abs(dist) < (e.boss ? 34 : 19) && Math.abs(e.y - p.y) < 37)
-      hurt(e.boss ? 12 : 5);
+    if (!e.boss && Math.abs(dist) < 19 && Math.abs(e.y - p.y) < 37) hurt(5);
+    if (e.boss && !e.rush && Math.abs(e.x - p.x) < 23 && p.y > GROUND - 31) hurt(8);
   }
+  if (modal) return;
+  stepBossZones(dt);
   if (modal) return;
   for (let s of [...shots]) {
     s.life -= dt;
@@ -1405,7 +1375,7 @@ function step(dt) {
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     if (s.team) {
-      const contact = Math.abs(s.x - p.x) < 21 && Math.abs(s.y - (p.y - 23)) < 24;
+      const contact = Math.abs(s.x - p.x) < (s.rx ?? 21) && Math.abs(s.y - (p.y - 23)) < (s.ry ?? 24);
       if (contact || s.y > GROUND) {
         if (contact) hurt(s.dmg);
         s.life = 0;
@@ -1423,13 +1393,13 @@ function step(dt) {
           max: 0.45,
         });
         for (let e of [...foes])
-          if (Math.abs(e.x - s.x) < s.area) hitFoe(e, s.dmg, s.id, s.dir);
+          if (Math.abs(e.x - s.x) < s.area + (e.boss ? e.half : 0)) hitFoe(e, s.dmg, s.id, s.dir);
       }
     } else {
       let e = foes.find(
         (f) =>
-          Math.abs(f.x - s.x) < (f.boss ? 38 : 18) &&
-          Math.abs(f.y - 23 - s.y) < (f.boss ? 54 : 30),
+          Math.abs(f.x - s.x) < f.half &&
+          s.y >= f.y - (f.boss ? f.height : 53) && s.y <= f.y + 7,
       );
       if (e) {
         if (s.id === 4) e.slow = 2.2;
@@ -1659,9 +1629,10 @@ if (!continuingRun) announceQuest();
 if (resumeFoe) {
   const boss = foes.find((e) => e.boss && e.kind === resumeFoe.kind);
   if (boss && Number.isFinite(resumeFoe.hp) && Number.isFinite(resumeFoe.x)) {
-    boss.hp = clamp(resumeFoe.hp, 0, boss.max);
+    const savedMax = resumeFoe.max > 0 ? resumeFoe.max : bossStats[boss.kind].oldHp;
+    boss.hp = clamp(resumeFoe.hp / savedMax, 0, 1) * boss.max;
     if (!boss.hp) boss.dying = 0.35;
-    boss.x = clamp(resumeFoe.x, 20, worldWidth - 20);
+    boss.x = clamp(resumeFoe.x, boss.half, worldWidth - boss.half);
   }
   resumeFoe = null;
 }

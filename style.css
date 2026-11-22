@@ -169,13 +169,17 @@ kbd {
 }
 #menu { flex: none; padding: 0 7px 0 2px; gap: 3px; font-size: 11px; }
 #menu i { width: 28px; height: 28px; }
-#bossbar { grid-area: 1 / 2; display: flex; align-items: center; gap: 7px; width: clamp(155px,23vw,310px); padding: 4px 10px; }
-#bossbar > span { flex: 1; }
-#bossbar > i { width: 15px; height: 15px; }
-#bossbar b { font-size: 11px; }
-.boss-track, #bossfill { display: block; height: 4px; }
-.boss-track { margin: 2px 0; background: #16284b; }
-#bossfill { background: #ee88a3; }
+#bossbar { grid-area: 1 / 2; display: flex; align-items: start; gap: 8px; width: clamp(210px,31vw,440px); padding: 6px 10px; background: #162339ed; }
+.boss-info { min-width: 0; flex: 1; }
+#bossbar > i { width: 20px; height: 20px; }
+.boss-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+#bossbar b { font-size: 13px; }
+#bossphase { color: #f6d998; font-size: 11px; white-space: nowrap; }
+.boss-track, #bossfill { display: block; height: 5px; }
+.boss-track { margin: 5px 0 2px; background: #342738; }
+#bossfill { background: linear-gradient(90deg,#b55c82,#f5af8e); }
+#boss-warning { font-size: 12px; line-height: 1.45; margin-top: 4px; color: #ffe4a9; word-break: keep-all; }
+#boss-warning:empty { display: none; }
 #toast {
   position: absolute; top: 16%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 90%;
   color: var(--cream); background: #152740b8; padding: 6px 15px; font-size: 12px;
@@ -402,7 +406,7 @@ kbd {
   .field-tools { display: contents; }
   #menu { grid-area: 1 / 2; justify-self: end; }
   #quest { grid-area: 2 / 1 / 3 / -1; justify-self: end; width: min(260px,82%); gap: 2px; padding: 6px 10px; }
-  #bossbar { grid-area: 2 / 1 / 3 / -1; justify-self: center; width: min(230px,80%); }
+  #bossbar { grid-area: 2 / 1 / 3 / -1; justify-self: center; width: min(300px,94%); }
   .hud-top:has(#bossbar:not([hidden])) #quest { grid-row: 3; }
   #quest-notice { top: max(29%,172px); }
   .dock { padding-inline: max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right)); }

@@ -158,7 +158,8 @@ function heroFrame(p) {
 function monsterFrame(e) {
   if (e.dying > 0)
     return [8, 9, 10, 11][Math.min(3, Math.floor((0.7 - e.dying) * 6))];
-  if (e.warn > 0) return e.warn > (e.boss ? 0.42 : 0.16) ? 4 : 5;
+  if (e.warn > 0) return (e.boss ? bossWarningProgress(e) < .54 : e.warn > .16) ? 4 : 5;
+  if (e.rush) return e.rush.elapsed < .35 ? 6 : 7;
   if (e.action > 0) return e.action > 0.18 ? 6 : 7;
   if (e.hit > 0) return e.hit > 0.09 ? 8 : 9;
   if (e.moving) return [2, 0, 3, 1][Math.floor((clock + e.home) * 6) % 4];
@@ -458,7 +459,7 @@ function drawQuestArrow(x) {
   if (!leg || modal || leg.point.dying) return;
   const dx = leg.point.x - player.x;
   const atPoint = besideQuestTarget();
-  const bossInReach = leg.point.boss && Math.abs(dx) < 50;
+  const bossInReach = leg.point.boss && Math.abs(dx) < leg.point.half + 25;
   const turn = atPoint ? -1 : (Math.abs(dx) < 10 || bossInReach) ? 1 : dx < 0 ? 2 : 0;
   const bob = reducedMotion.matches ? 0 : Math.round(Math.sin(clock * 3.5) * 1.5);
   const y = Math.max(13, player.y - (atPoint ? 96 : 72) + bob);
@@ -518,11 +519,14 @@ function monsters() {
   for (let e of foes) {
     let x = e.x - cam,
       bob = e.boss ? Math.sin(clock * 2) * 2 : 0,
-      h = e.boss ? (e.kind === 4 ? 113 : 86) : 27;
-    shadow(x, GROUND + 2, e.boss ? 32 : 10);
-    if (e.boss && e.warn > 0) {
-      const tell = subjects[attackPattern(e)].tell;
-      label(e.kind === 4 ? "망각 · " + tell : tell, x, e.y - h - 23, "#ffddb5", "#693e48", 8);
+      h = e.height;
+    shadow(x, GROUND + 2, e.boss ? e.half * .92 : 10);
+    if (e.rush && !reducedMotion.matches) {
+      for (const trail of [3, 2, 1]) {
+        g.globalAlpha = .27 / trail;
+        drawActor("foe" + e.kind, 6, x - e.dir * trail * 17, e.y + bob, h, e.dir > 0);
+      }
+      g.globalAlpha = 1;
     }
     if (e.hit > 0) g.filter = "brightness(1.7)";
     if (e.dying > 0) g.globalAlpha = Math.min(1, e.dying * 5);
@@ -575,6 +579,9 @@ function particles() {
   for (const e of foes) if (e.boss && e.warn > 0) {
     bossCharge(e);
     warningPath(e);
+  }
+  for (const zone of bossZones) {
+    drawBossZone(zone, zone.timer < 0, zone.timer < 0 ? 1 + zone.timer / zone.delay : 1);
   }
   for (const s of shots) {
     if (!s.team) continue;

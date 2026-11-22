@@ -55,7 +55,7 @@ function mapFixtures() {
   for (const station of exhibitStations()) items.push({...station, key:station.onBench ? null : theme});
   for (const b of platforms()) {
     if (scene.type === "classroom") {
-      if (!courseRun) items.push({x:b.x, feet:GROUND, w:b.w, h:0});
+      if (!courseRun || b.kind === "desk") items.push({x:b.x, feet:GROUND, w:b.w, h:0});
       continue;
     }
     const bench = scene.type === "floor" || scene.type === "arena";
@@ -82,117 +82,6 @@ function cropStamp(image, regions, name, left, top, w, h, flip = false) {
   g.restore();
 }
 
-const courseColors = [
-  ["#78b2bc","#4b6a71","#406570"],
-  ["#b4d7c2","#597f76","#3b6964"],
-  ["#b9ce78","#6c8b53","#4e6a45"],
-  ["#dbc395","#886b56","#78624e"],
-];
-function courseWell(left, right, shade) {
-  const l = Math.round(left - cam), edge = Math.round(right - cam), width = edge - l;
-  if (edge < 0 || l > W) return;
-  const depth = g.createLinearGradient(0,GROUND,0,H);
-  depth.addColorStop(0,"#4b413b");
-  depth.addColorStop(.32,"#33313b");
-  depth.addColorStop(1,"#232a39");
-  r(l,GROUND,width,H-GROUND,depth);
-  r(l,GROUND,width,2,"#80664e");
-  r(l+2,GROUND+2,width-4,2,"#5d4f45");
-  path([[l,GROUND],[l+12,GROUND+13],[l+13,H],[l,H]],shade);
-  path([[edge,GROUND],[edge-12,GROUND+13],[edge-13,H],[edge,H]],shade);
-  for (const side of [l,edge]) {
-    const dir = side === l ? 1 : -1;
-    for (let i=0;i<5;i++) {
-      const x = side+dir*(i+1), y = GROUND+i*4;
-      r(x-1,y,3,2,i%2 ? "#645348" : "#aa8563");
-    }
-  }
-  for (let px = l + 19; px < edge - 15; px += 23) r(px,GROUND+7,11,1,"#514c4a");
-  for (let px = l + 27; px < edge - 17; px += 31) r(px,GROUND+27,9,1,"#3c4050");
-}
-
-function drawCoursePlatform(p, colors) {
-  const [light, material, shadowTone] = colors;
-  const x = Math.round(p.x - cam), y = Math.round(p.y), left = Math.round(x-p.w/2);
-  if (x < -100 || x > W + 100) return;
-  if (p.kind === "rail") {
-    const track = Math.round(p.homeX-cam-p.range-p.w/2-4);
-    r(track,y+10,2*p.range+p.w+8,4,"#3c4a51");
-    r(track+1,y+10,2*p.range+p.w+6,1,"#7b9995");
-    r(track,y+8,3,9,"#857863");
-    r(track+2*p.range+p.w+6,y+8,3,9,"#857863");
-  } else if (p.kind === "lift") {
-    const top = Math.round(p.homeY-p.range-9);
-    for (const side of [-1, 1]) {
-      r(x+side*(p.w/2-8),top,3,p.range*2+28,"#5b7778");
-      r(x+side*(p.w/2-8)+1,top+2,1,p.range*2+23,"#a9c2a7");
-    }
-  }
-  if (!p.active) {
-    for (let i=0;i<p.w-3;i+=8) {
-      r(left+i,y,5,1,light);
-      if (p.kind === "shale") r(left+i+2,y+6+(i%9),2,2,material);
-    }
-    if (p.kind === "steam" && !reducedMotion.matches) {
-      for (let i=0;i<3;i++) {
-        const lift = (courseRun.time * 15+i*6)%17;
-        r(left+11+i*(p.w-20)/3,y-2-lift,3+Math.floor(lift/6),2,"#c3dcd1");
-      }
-    }
-    return;
-  }
-  const goal = p.kind === "goal";
-  const trim = goal ? "#f2ce7f" : p.warning ? "#ffcf83" : light;
-  r(left,y,p.w,14,"#323a45");
-  r(left+1,y+1,p.w-2,9,goal ? "#805f40" : material);
-  r(left+3,y,p.w-6,2,trim);
-  r(left+4,y+8,p.w-8,2,shadowTone);
-  for (let i=13;i<p.w-10;i+=9) {
-    r(left+i,y+5+(i%2),5,1,shadowTone);
-    r(left+i+4,y+3,3,1,light);
-  }
-  for (const edge of [left+4,left+p.w-8]) {
-    r(edge,y+4,3,3,"#c7b58a");
-    r(edge,y+12,5,6,"#4a4a49");
-  }
-  if (p.kind === "steam" && p.warning) {
-    for (let n=11;n<p.w-10;n+=8) {
-      path([[left+n,y+8],[left+n+3,y+2],[left+n+6,y+2],[left+n+3,y+8]],trim);
-    }
-  } else if (p.kind === "sprout") {
-    r(left+9,y,p.w-18,3,"#aadc68");
-    for (const shift of [-15, 14]) {
-      path([[x+shift-9,y],[x+shift-5,y-5],[x+shift+5,y-3],[x+shift+9,y]],"#86b54f");
-      r(x+shift-4,y-2,8,1,"#e5eda2");
-    }
-    r(x-4,y+3,8,5,"#d4e393");
-  } else if (p.kind === "shale") {
-    strokePixels([[x-17,y],[x-9,y+4],[x-4,y+2],[x+1,y+10],[x+9,y+13]],p.warning ? "#ffdc95" : "#524d4b",2);
-  } else {
-    r(left+13,y+4,p.w-26,1,goal ? "#c9a367" : light);
-  }
-}
-
-function drawScholarCourse() {
-  const colors = courseColors[courseRun.id >> 1];
-  courseWell(courseStart,courseRest.left,colors[2]);
-  courseWell(courseRest.right,courseExit,colors[2]);
-  const checkX = Math.round(courseRest.x - cam);
-  if (checkX >= -28 && checkX <= W+28) {
-    const lit = courseRun.reached ? "#cfe48c" : "#ead4a0";
-    r(checkX-25,GROUND-2,50,3,"#434843");
-    r(checkX-20,GROUND-2,40,1,lit);
-    r(checkX+16,GROUND-28,2,25,"#624e3e");
-    path([[checkX+17,GROUND-29],[checkX+34,GROUND-29],[checkX+31,GROUND-23],[checkX+34,GROUND-18],[checkX+17,GROUND-18]],lit);
-    r(checkX+18,GROUND-26,9,2,courseRun.reached ? "#6a8b51" : "#ac8450");
-  }
-  for (const p of courseRun.platforms) drawCoursePlatform(p,colors);
-  const signX = courseSign.x-cam;
-  if (signX >= -55 && signX <= W+55) {
-    r(signX-2,278,4,21,"#745a46");
-    label(courseRun.definition.name,signX,262,"#ffebbd","#3e5251",10);
-  }
-}
 function groundContact(x,feet,width,height,flip=false) {
   cropStamp(furniturePaint,fixtureAtlas.regions,"shadow",x-width/2,feet-height/2,width,height,flip);
 }

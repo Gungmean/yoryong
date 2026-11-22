@@ -52,10 +52,8 @@ function buildQuestRoute(q) {
     return [passage(points.find(p => p.type === "entrance"), "중앙 현관 앞에서 ↑를 눌러 본관에 들어가세요.", "중앙 현관 · ↑ 입장")];
   if (scene.type === "classroom") {
     if (q.kind === "trial" && courseRun?.id === q.id) {
-      const hint = courseRun.definition.hint;
-      return courseRun.reached
-        ? [passage(scholarPoint(q.id), "끝 발판에 올라 학자와 대화하세요. " + hint, "끝 발판 · ↑ 학자와 대화")]
-        : [passage(courseRest, "발판을 건너 중간 지점으로 가세요. " + hint, "점프 구간 · 중간 지점까지")];
+      const {point,cue,short} = courseObjective();
+      return [passage(point,cue,short)];
     }
     return stairs.map(p => passage(p, p.name + "에서 ↑를 눌러 " + scene.floor + "층 복도로 나가세요.", p.name + " · ↑ 나가기"));
   }
@@ -79,7 +77,7 @@ function buildQuestRoute(q) {
     }));
   }
   if (q.kind === "trial")
-    return [passage(destination, destination.name + "에서 ↑를 눌러 들어가세요. 발판 끝에 학자가 있어요.", destination.name + " · ↑ 입장")];
+    return [passage(destination, destination.name + "에서 ↑를 눌러 들어가 실험을 시작하세요.", destination.name + " · ↑ 입장")];
   if (destination)
     return [passage(destination, destination.name + "에서 ↑를 누르고 " + subjects[q.id].room + "을 선택하세요.", destination.name + " · ↑ 입장")];
   return [];

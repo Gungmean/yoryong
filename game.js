@@ -234,7 +234,7 @@ function save() {
         x: player.x,
         hp,
         mp,
-        courseCheckpoint: courseRun?.reached ? courseRun.id : null,
+        course: courseRecord(),
         sound,
         musicEnabled,
         musicVolume,
@@ -287,7 +287,7 @@ function load() {
       scene = { type: "floor", floor: s.floor, subject: -1 };
     if (s.type === "classroom" && classroomDoor(s.floor, s.room)) {
       scene = { type: "classroom", floor: s.floor, room: s.room, subject: -1 };
-      savedCourse = Number.isInteger(d.courseCheckpoint) ? d.courseCheckpoint : -1;
+      savedCourse = d.course;
     }
     if (
       s.type === "arena" &&
@@ -815,11 +815,13 @@ function labChoice(name) {
   );
 }
 function scholarPoint(id) {
-  return { x: courseGoal.x + 27, y: courseGoal.y, name: scholars[id][0], type: "scholar", id };
+  const [x,y = GROUND] = scholarCourses[id].scholar;
+  return {x,y,name:scholars[id][0],type:"scholar",id};
 }
 function objects() {
   if (scene.type === "classroom") return [
-    ...sideStairs.classroom, classroomBoard, ...(courseRun ? [courseSign, scholarPoint(courseRun.id)] : []),
+    ...sideStairs.classroom, classroomBoard,
+    ...(courseRun ? [courseSign, ...(courseSolved() ? [scholarPoint(courseRun.id)] : courseDevices())] : []),
   ];
   if (scene.type === "gate")
     return [
@@ -869,9 +871,9 @@ function travelStair(stair, direction) {
 }
 function findNear() {
   return objects()
-    .filter(o => o.type === "scholar"
-      ? player.grounded && player.y === o.y && Math.abs(o.x - player.x) < 48
-      : Math.abs(o.x - player.x) < 58 && player.y > GROUND - 65 && (!courseRun || player.y <= GROUND))
+    .filter(o => o.y !== undefined
+      ? player.grounded && Math.abs(player.y - o.y) < 8 && Math.abs(o.x - player.x) < (o.type === "scholar" ? 48 : 35)
+      : Math.abs(o.x - player.x) < 58 && player.y > GROUND - 65)
     .sort((a, b) => Math.abs(a.x - player.x) - Math.abs(b.x - player.x))[0];
 }
 function interact() {
@@ -881,7 +883,7 @@ function interact() {
     notify(
       scene.type === "gate"
         ? "오른쪽 중앙 현관 표식 가까이 이동하세요."
-        : courseRun ? "끝 발판에 올라 학자 옆에서 ↑를 누르세요." : "문 옆에서 ↑를 누르세요.",
+        : courseRun ? courseObjective().cue : "문 옆에서 ↑를 누르세요.",
     );
     return;
   }
@@ -917,12 +919,22 @@ function interact() {
   }
   if (o.type === "board") {
     playEffect("page");
-    bubble(classroomNotes[scene.floor - 3]?.[scene.room - 1] || courseRun.definition.hint);
+    if (courseRun?.id === 3) courseRun.readBoard = true;
+    bubble(courseRun?.id === 3 ? courseRun.definition.cues[0]
+      : classroomNotes[scene.floor - 3]?.[scene.room - 1] || courseObjective().cue);
     return;
   }
   if (o.type === "courseHint") {
     playEffect("page");
-    bubble(courseRun.definition.hint + " 발판을 건너 중간 지점까지 가세요.");
+    bubble(courseObjective().cue);
+    return;
+  }
+  if (o.type === "courseDevice") {
+    useCourseDevice(o);
+    return;
+  }
+  if (o.type === "courseStrike") {
+    notify("기본 공격 A로 진동판을 두드리세요.");
     return;
   }
   if (o.name.endsWith("학실") || o.name === "물리지학실") {
@@ -1002,7 +1014,7 @@ function platforms() {
 function classroomPanels() {
   return [
     { sx: 0, sy: classroomArtRow() * H, sw: 1080, sh: H, x: 0, y: 0, w: worldWidth, h: H, z: -200 },
-    ...(courseRun ? [] : platforms()).map((desk, index) => ({
+    ...platforms().filter(p => !courseRun || p.kind === "desk").map((desk, index) => ({
       sx: 2 + 136 * ((scene.room - 1 + index) % 3), sy: 1082, sw: 132, sh: 96,
       x: desk.x - desk.w / 2, y: desk.y - 19, w: desk.w, h: 58, z: 0,
     })),
@@ -1210,6 +1222,7 @@ function attack() {
   player.swing = 0.2;
   combatEvent("slash", player.x, player.y - 29, .24, { dir: player.face });
   playEffect("slash");
+  strikeCourseDevice();
   for (const e of [...foes])
     if (
       (e.x - player.x) * player.face >= -19 - (e.boss ? e.half : 0) &&
@@ -1376,8 +1389,7 @@ function step(dt) {
             oldY <= (b.oldY ?? b.y) && p.y >= b.y,
         )
       : null;
-  const floorHit = p.y >= GROUND && (!courseRun || (oldY <= GROUND && courseHasFloor(p.x)));
-  if (landing || floorHit) {
+  if (landing || p.y >= GROUND) {
     if (!wasGrounded && p.vy > 70) {
       p.landTime = 0.09;
       combatEvent("land", p.x, landing ? landing.y : GROUND, .29);
@@ -1390,12 +1402,7 @@ function step(dt) {
     if (courseRun) courseLanded(landing);
   } else if (courseRun) {
     courseRun.support = null;
-    if (p.y > GROUND + 32) {
-      retryCourse();
-      return;
-    }
   }
-  if (courseRun) checkCourseRest();
   if (axis && p.grounded && wasGrounded && p.dash <= 0) {
     p.stepDistance += Math.abs(p.x - oldX);
     if (p.stepDistance >= 34) {

@@ -358,7 +358,7 @@ function classroomInterior(depth) {
   }
   if (courseRun) {
     drawScholarCourse();
-    classroomScholar(scholarPoint(courseRun.id));
+    if (courseSolved()) classroomScholar(scholarPoint(courseRun.id));
   }
   for (const door of sideStairs.classroom) {
     const x = door.x - cam;
@@ -366,12 +366,12 @@ function classroomInterior(depth) {
     label(door.name,x,48,"#f5e8c4","#41534b",8);
   }
   const boardX = classroomBoard.x - cam;
-  if (boardX > -120 && boardX < W+120) {
+  if (courseRun?.id !== 6 && boardX > -120 && boardX < W+120) {
     g.save();
     g.translate(Math.round(boardX+62),153);
     g.scale(.44,.44);
     g.globalAlpha=.65;
-    chalkExperiment(0,0,sceneryTime,(scene.floor+scene.room)%4);
+    chalkExperiment(0,0,sceneryTime,courseRun ? courseRun.id >> 1 : (scene.floor+scene.room)%4);
     g.restore();
     word(courseRun?.definition.name || floorName(),boardX,132,13,"#ebead9");
   }
@@ -460,11 +460,12 @@ function besideQuestTarget() {
 }
 function drawQuestArrow(x) {
   const leg = activeLeg;
-  if (!leg || modal || leg.point.dying) return;
+  if (!leg || modal || leg.point.dying ||
+      (courseRun?.id===3 && leg.point.type==="board" && (courseRun.readBoard || courseRun.stage))) return;
   const dx = leg.point.x - player.x;
   const atPoint = besideQuestTarget();
   const bossInReach = leg.point.boss && Math.abs(dx) < leg.point.half + 25;
-  const above = leg.point.type === "scholar" && leg.point.y < player.y - 24 && Math.abs(dx) < 30;
+  const above = leg.point.y < player.y - 24 && Math.abs(dx) < 32;
   const turn = atPoint ? -(leg.direction || 1) : above ? -1 : (Math.abs(dx) < 10 || bossInReach) ? 1 : dx < 0 ? 2 : 0;
   const bob = reducedMotion.matches ? 0 : Math.round(Math.sin(clock * 3.5) * 1.5);
   const y = Math.max(13, player.y - (atPoint ? 96 : 72) + bob);
@@ -483,8 +484,7 @@ function character() {
       : p.vx
         ? Math.abs(Math.sin(clock * 13)) * 2
         : Math.sin(clock * 2) * 0.9;
-  if (courseHasFloor(p.x) || courseRun?.support)
-    shadow(x, (courseRun?.support?.y ?? GROUND) + 1, clamp(16 - (GROUND - p.y) / 10, 7, 16));
+  shadow(x, (courseRun?.support?.y ?? GROUND) + 1, clamp(16 - (GROUND - p.y) / 10, 7, 16));
   const frame = heroFrame(p);
   if (p.dash > 0) {
     const dashFrame = Math.min(7, Math.floor((1 - p.dash / .19) * 8));
@@ -504,7 +504,7 @@ function character() {
     label("요룡이", x, p.y + 5, "#fff4db", "#2c303b", 8);
   if (near) {
     let action = near.name;
-    let key = "↑ ";
+    let key = near.type === "courseStrike" ? "A " : "↑ ";
     if (near.type === "scholar") action = near.name + " · 대화";
     else if (near.room) action += " 입장";
     else if (near.name === "매점") action = "회복";
@@ -667,11 +667,13 @@ function miniMap() {
     rect(7,7,w-14,h-15,paper);
     rect(u(classroomBoard.x)-15,8,30,4,"#406448");
     if (courseRun) {
-      for (const [left,right] of [[0,courseStart],[courseRest.left,courseRest.right],[courseExit,worldWidth]]) {
-        rect(u(left),routeY,u(right)-u(left),3,"#9a7952");
+      route();
+      for (const d of courseRun.devices) {
+        const y=routeY-(GROUND-d.y)*.14;
+        rect(u(d.x)-1,y-3,3,3,"#8d9868");
       }
       for (const p of courseRun.platforms) {
-        rect(u(p.x-p.w/2),routeY-(GROUND-p.y)*.14,u(p.w)-u(0),2,p.active ? ink : "#b99978");
+        if (p.active) rect(u(p.x-p.w/2),routeY-(GROUND-p.y)*.14,u(p.w)-u(0),2,ink);
       }
     } else {
       for (let x=30; x<w-20; x+=19) {
@@ -699,7 +701,7 @@ function miniMap() {
   const leg = chooseQuestLeg();
   if (leg) {
     const target = u(leg.point.x);
-    const markY = courseRun && leg.point.type === "scholar" ? 8 : routeY-14;
+    const markY = courseRun ? clamp(routeY-10-(GROUND-(leg.point.y??GROUND))*.14,5,routeY-10) : routeY-14;
     rect(target-1,markY,3,routeY-markY,"#775425");
     for (let k=-4; k<=4; k++) rect(target-(4-Math.abs(k)),markY+k,9-2*Math.abs(k),"#835a26");
     for (let k=-2; k<=2; k++) rect(target-(2-Math.abs(k)),markY+k,5-2*Math.abs(k),"#fff0a0");

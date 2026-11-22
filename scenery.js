@@ -1,5 +1,169 @@
 "use strict";
 
+const schoolPaint = new Image(), furniturePaint = new Image();
+schoolPaint.src = campusAtlas.data;
+furniturePaint.src = fixtureAtlas.data;
+const labPaint = ["physics", "chem", "bio", "earth"];
+const labFloorCuts = [[.75,.892],[.75,.89],[.77,.891],[.73,.851]];
+const panoramaWidth = rate => Math.max(680, W + Math.max(0, worldWidth - W) * rate + 12);
+function furnishingTheme() {
+  if (scene.type === "roof") return progress.won ? "roof-day" : "roof-night";
+  return scene.type === "arena" ? labPaint[scene.subject] : "hall-case";
+}
+// Upper-left daylight in the school, cool skylight in the labs, and a warm rim from the rooftop rift.
+const roomLight = {
+  gate: ["#fff3d5","#c8e3ff","#937654","#fff9e6", 1],
+  hall: ["#ffe2ae","#fce9ce","#94644b","#ffd490", 1],
+  classroom: ["#ffe7b8","#fff1ce","#96745e","#ffda90", 1],
+  physics: ["#b9e8ff","#d2dcff","#60537c","#ffc78b", -1],
+  chem: ["#ffd3b9","#e3c6fa","#755080","#e898e9", 1],
+  bio: ["#fff2a4","#e0f0cb","#647553","#ffe2a3", 1],
+  earth: ["#ffe0a6","#c3d7fc","#635a78","#a6d5fc", -1],
+  "roof-night": ["#ffc29a","#ddd1ff","#66527f","#ea9cf1", -1],
+  "roof-day": ["#ffe2a5","#ffdcd3","#967688","#ffe1a0", -1],
+};
+function environmentLight() {
+  return roomLight[scene.type === "floor" ? "hall" :
+    scene.type === "arena" || scene.type === "roof" ? furnishingTheme() : scene.type];
+}
+// Rear exhibits sit on a separate strip of floor, clear of foreground jumping platforms.
+function exhibitStations() {
+  if (scene.type === "floor") {
+    if (scene.floor === 1) return [{x:775, feet:283, w:83, h:23, seal:true}];
+    return [477,1730].map(x=>({x, feet:282, w:54, h:21, scale:.64, subject:scene.floor-2}));
+  }
+  if (scene.type === "arena") return [
+    {x:229, feet:278, w:66, h:25, scale:.83, subject:scene.subject},
+    {x:711, feet:274, w:55, h:22, scale:.65, subject:scene.subject},
+  ];
+  return [];
+}
+function mapFixtures() {
+  const items = [];
+  const theme = furnishingTheme();
+  if (scene.type==="classroom") for (const door of sideStairs.classroom)
+    items.push({key:"sill",x:door.x,feet:scene.floor===5?257:260,w:64,h:7});
+  if (scene.type === "arena" || scene.type === "roof") {
+    for (const stair of sideStairs[scene.type]) {
+      const key = "stairs-" + theme, [, , sw, sh] = fixtureAtlas.regions[key];
+      const w = scene.type === "arena" ? 117 : 123;
+      items.push({key, x:stair.x, feet:GROUND, w, h:Math.round(w*sh/sw), flip:stair.side==="east"});
+    }
+  }
+  for (const station of exhibitStations()) items.push({...station, key:theme});
+  for (const b of platforms()) {
+    if (scene.type === "classroom") {
+      items.push({x:b.x, feet:GROUND, w:b.w, h:0});
+      continue;
+    }
+    const bench = scene.type === "floor";
+    // The seat is 58% down the bench sprite; cabinet tops accept feet 8% down.
+    const seat = bench ? .58 : .08;
+    const h = Math.round((GROUND-b.y)/(1-seat));
+    items.push({key:bench?"bench":theme, x:b.x, feet:GROUND, w:b.w, h});
+  }
+  return items;
+}
+const campusGarden = [
+  ["tree",-16,288,188,.78,false], ["tree",920,287,164,.78,true], ["tree",1195,289,158,.78,true],
+  ["fence",85,295,124,1,true], ["fence",483,295,135,1,false], ["fence",807,295,135,1,true],
+  ["roses",114,299,70,1,false], ["roses",431,298,62,1,true], ["roses",862,299,71,1,false], ["roses",1080,300,69,1,true],
+  ["lamp",181,296,23,1,false], ["lamp",548,296,25,1,false], ["lamp",746,296,25,1,true],
+];
+function cropStamp(image, regions, name, left, top, w, h, flip = false) {
+  if (!image.naturalWidth) return;
+  const [sx,sy,sw,sh] = regions[name];
+  g.save();
+  g.translate(Math.round(flip ? left+w : left), Math.round(top));
+  if (flip) g.scale(-1,1);
+  g.drawImage(image,sx,sy,sw,sh,0,0,Math.round(w),Math.round(h));
+  g.restore();
+}
+function groundContact(x,feet,width,height,flip=false) {
+  cropStamp(furniturePaint,fixtureAtlas.regions,"shadow",x-width/2,feet-height/2,width,height,flip);
+}
+
+// Each window and its sunlit floorboards use the same horizontal slice of the mural.
+const hallSections = new Map();
+function hallwaySections() {
+  if (hallSections.has(scene.floor)) return hallSections.get(scene.floor);
+  const result = [], bays = hallBays[scene.floor];
+  for (let i=0;i<bays.length;i++) {
+    const b=bays[i], l=i ? hallBoundary(bays[i-1],b) : 0;
+    const r=i+1<bays.length ? hallBoundary(b,bays[i+1]) : worldWidth;
+    const add=(x,end,u,v,asset="corridor",door=null)=>{
+      if (end>x) result.push({x,w:end-x,u,v,asset,door});
+    };
+    if (b.type==="stair") {
+      const east=b.side==="east";
+      add(l,r,east?1:0,east?0:1,"stairhall");
+      continue;
+    }
+    const span=Math.min(29,(b.x-l)*.7,(r-b.x)*.7);
+    const left=Math.max(l,b.x-113), right=Math.min(r,b.x+113);
+    for (const [a,end] of [[l,left],[right,r]]) {
+      const count=Math.ceil((end-a)/145);
+      for (let j=0;j<count;j++) {
+        const w=(end-a)/count, half=.127*Math.min(1,w/132);
+        add(a+j*w,a+(j+1)*w,.449-half,.449+half);
+      }
+    }
+    add(left,b.x-span,0,.183);
+    add(b.x+span,right,.297,.5);
+    const inside = b.name==="물리지학실" ? "physics" : b.name==="생명화학실" ? "chem" : "classroom";
+    const [,,iw,ih]=campusAtlas.regions[inside];
+    const door={x:b.x,inside,view:(span*2+4)*ih*.79/(132*iw)};
+    if (b.room) {
+      const sw=Math.round((span*2+4)*231/132);
+      door.classroom=[b.room%2 ? 164 : 716,(scene.floor-3)*H+72,sw,231];
+    }
+    add(b.x-span,b.x+span,.183,.297,"corridor",door);
+  }
+  hallSections.set(scene.floor,result);
+  return result;
+}
+function doorTravel(doorX, width) {
+  const near = Math.max(0,1-Math.abs(player.x-doorX)/87);
+  return width*.825*near*near*(3-2*near);
+}
+// Keep one continuous parquet grain under every bay. The sunlit part of each
+// painted floor sample feathers into that grain at cut edges and downstage.
+const hallFloors = new Map();
+function hallFloorPainting() {
+  if (hallFloors.has(scene.floor)) return hallFloors.get(scene.floor);
+  const floor=document.createElement("canvas");
+  floor.width=worldWidth; floor.height=H-275;
+  const ctx=floor.getContext("2d");
+  ctx.imageSmoothingEnabled=false;
+  const [sx,sy,sw,sh]=campusAtlas.regions.corridor;
+  const top=275/H;
+  for (let x=0;x<floor.width;x+=104)
+    ctx.drawImage(schoolPaint,sx+sw*.558,sy+sh*top,sw*.141,sh*(1-top),x,0,104,floor.height);
+  const pane=document.createElement("canvas");
+  for (const {asset,x,w,u,v} of hallwaySections()) {
+    const start=Math.round(x), width=Math.round(x+w)-start;
+    if (width<1) continue;
+    pane.width=width; pane.height=floor.height;
+    const ink=pane.getContext("2d"); ink.imageSmoothingEnabled=false;
+    const [rx,ry,rw,rh]=campusAtlas.regions[asset];
+    ink.save();
+    if (v<u) { ink.translate(width,0); ink.scale(-1,1); }
+    ink.drawImage(schoolPaint,rx+Math.min(u,v)*rw,ry+top*rh,Math.abs(u-v)*rw,rh*(1-top),0,0,width,floor.height);
+    ink.restore();
+    ink.globalCompositeOperation="destination-in";
+    const edge=Math.min(.45,11/width), blend=ink.createLinearGradient(0,0,width,0);
+    blend.addColorStop(0,"transparent"); blend.addColorStop(edge,"black");
+    blend.addColorStop(1-edge,"black"); blend.addColorStop(1,"transparent");
+    ink.fillStyle=blend; ink.fillRect(0,0,width,pane.height);
+    const depth=ink.createLinearGradient(0,0,0,pane.height);
+    depth.addColorStop(0,"black"); depth.addColorStop(.63,"rgba(0,0,0,.92)"); depth.addColorStop(1,"transparent");
+    ink.fillStyle=depth; ink.fillRect(0,0,width,pane.height);
+    ctx.drawImage(pane,start,0);
+  }
+  hallFloors.set(scene.floor,floor);
+  return floor;
+}
+
 // Local coordinates use the field's 360-pixel height. Scenery has no collision
 // or hit targets and never consumes the combat clock or random-number stream.
 let sceneryTime = 0;
@@ -72,14 +236,14 @@ function campusAir(time) {
   }
 }
 
-function corridorExhibit(x, left, right, roomIndex, time) {
+function corridorExhibit(x, width, roomIndex, time) {
   const floor = scene.floor;
   // Mount each piece on the wall next to its door, within that room's tile.
   const side = roomIndex % 2 ? 1 : -1;
-  const mount = x + side * Math.min(66, (right - left) * .27);
+  const mount = x + side * Math.min(66, width * .27);
   if (mount > -30 && mount < W + 30) {
     if (roomIndex % 3 === 0) {
-      const y = 107;
+      const y = 86;
       r(mount - 6, y + 6, 13, 16, "#594f3f");
       r(mount - 4, y + 7, 9, 13, "#384e47");
       const endX = mount + Math.sin(time * 2.6 + roomIndex) * 2.5;
@@ -102,14 +266,6 @@ function corridorExhibit(x, left, right, roomIndex, time) {
       word(floor + "F",mount+1,y+19,7,"#f8e7b8");
     }
   }
-  const lightX = left - cam + (right - left) * .37;
-  const drift = Math.sin(time * .4 + roomIndex) * 3;
-  path([[lightX,155],[lightX+12,155],[lightX-28+drift,278],[lightX-60+drift,281]], "#ffe7ab18");
-  for (let i=0; i<5; i++) {
-    const px = lightX - 24 + Math.sin(time*.36 + i*3) * 17;
-    const py = 165 + wrap(i*23 - time*(1+i*.3), 88);
-    r(px,py,1,1,"#fff0bcaa");
-  }
 }
 
 function ellipseLine(x, y, rx, ry, angle, color) {
@@ -123,10 +279,6 @@ function chalkExperiment(cx, cy, time, subject) {
   const chalk = subjects[subject].color;
   g.save();
   g.translate(Math.round(cx), Math.round(cy));
-  r(-55, -23, 110, 46, "#173439e0");
-  for (const x of [-53, 47]) {
-    r(x, -22, 6, 1, "#92a79b"); r(x, 21, 6, 1, "#92a79b");
-  }
   if (subject === 0) {
     for (const tilt of [-.36,.36]) {
       ellipseLine(0, 0, 35, 11, tilt, chalk);
@@ -230,7 +382,7 @@ function labExhibit(x, y, time, subject) {
 }
 
 function roofSky(x, tileWidth, time, won) {
-  const cx=x+tileWidth*.67, cy=64;
+  const cx=x+tileWidth*.646, cy=65;
   if (!won) {
     for (let i=0; i<6; i++) {
       const phase=time*.14+i*Math.PI/3;
@@ -248,6 +400,5 @@ function roofSky(x, tileWidth, time, won) {
     strokePixels([[px-9,py-4],[px,py]],"#ddd2e3a8");
     r(px,py,2,1,"#fff3da");
   }
-  // A windsock on the service hut indicates the gust moving across the roof.
-  pennant(x+tileWidth*.095,115,30,time+2,"#a77b99");
+  pennant(x+tileWidth*.247,255,54,time+2,won?"#967357":"#776786");
 }

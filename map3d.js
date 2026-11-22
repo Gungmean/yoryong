@@ -7,13 +7,13 @@ const campusWorld = (() => {
     sin = Math.sin(pitch),
     cos = Math.cos(pitch);
   const worldY = (screenY, z) => (H / 2 - screenY + z * sin) / cos;
-  const image = new Image();
-  image.src = campusAtlas.data;
+  const image = schoolPaint;
   let renderer,
     camera,
     stage,
     texture,
     classroomTexture,
+    furnitureTexture, paintedFurniture, contactMat,
     paper,
     unavailable = false,
     lost = false;
@@ -123,7 +123,8 @@ const campusWorld = (() => {
           }
           if(effect>3.5 && effect<4.5){
             float sweep=sin(stagePos.x*.014-stagePos.z*.019+time*.40);
-            c*=.985+.035*sweep;
+            float sunlit=smoothstep(.38,.79,dot(c,vec3(.32,.55,.13)));
+            c*=1.+sunlit*.045*sweep;
           }
           if(effect>4.5)c+=vec3(.062,.031,.091)*warning;
           if(effect>5.5 && effect<6.5){
@@ -161,6 +162,7 @@ const campusWorld = (() => {
       lastKey = "";
       texture.needsUpdate = true;
       if (classroomTexture) classroomTexture.needsUpdate = true;
+      if (furnitureTexture) furnitureTexture.needsUpdate = true;
     });
   }
 
@@ -230,23 +232,12 @@ const campusWorld = (() => {
       );
     }
     floor(name, start, end, backY, span, crop) {
-      const y = worldY(GROUND, 0),
-        zFront = (H + 7 - GROUND) / sin,
-        zBack = (backY - GROUND) / sin;
-      for (let x = start, n = 0; x < end; x += span, n++) {
-        const uv = n % 2 ? [crop[2], crop[1], crop[0], crop[3]] : crop;
-        this.quad(
-          name,
-          [
-            [x, y, zFront],
-            [x + span, y, zFront],
-            [x, y, zBack],
-            [x + span, y, zBack],
-          ],
-          uv,
-          4,
-        );
-      }
+      for (let x = start; x < end; x += span)
+        this.floorSection(name,x,Math.min(end,x+span),backY,crop);
+    }
+    floorSection(name,l,r,backY,crop) {
+      const y=worldY(GROUND,0), front=(H+2-GROUND)/sin, back=(backY-GROUND)/sin;
+      this.quad(name,[[l,y,front],[r,y,front],[l,y,back],[r,y,back]],crop,4);
     }
     finish(parent = stage) {
       if (!this.indices.length) return;
@@ -277,14 +268,50 @@ const campusWorld = (() => {
         k,
         new T.MeshStandardMaterial({
           color,
-          flatShading: true,
-          roughness: 0.73,
-          metalness: 0.12,
+          roughness: .67,
+          metalness: .08,
           emissive: color,
-          emissiveIntensity: glow,
+          emissiveIntensity: glow * .57,
         }),
       );
     return materials.get(k);
+  }
+  function atlasUV(shape, name, flip = false) {
+    const [sx,sy,sw,sh] = fixtureAtlas.regions[name];
+    const uv = shape.getAttribute("uv");
+    for (let i=0; i<uv.count; i++) {
+      const u=uv.getX(i), v=uv.getY(i);
+      uv.setXY(i,(sx+.5+(flip?1-u:u)*(sw-1))/furniturePaint.width,
+        1-(sy+.5+(1-v)*(sh-1))/furniturePaint.height);
+    }
+    return shape;
+  }
+  function fixturePlane(name,width,height,flip=false) {
+    return atlasUV(new T.PlaneGeometry(width,height),name,flip);
+  }
+  function contact(x, feet, z, width, height, parent = stage) {
+    const dir = environmentLight()[4];
+    const patch = new T.Mesh(fixturePlane("shadow", width, height/sin, dir<0), contactMat);
+    patch.rotation.x = -Math.PI/2;
+    patch.position.set(x+dir*width*.035,worldY(feet,z)+.35,z+1);
+    parent.add(patch);
+  }
+  function dressFloor() {
+    for (const item of mapFixtures()) {
+      const {key,x,feet,w,h,flip} = item, z=(feet-GROUND)/sin;
+      if (key && fixtureAtlas.regions["reflection-"+key]) {
+        const length=Math.min(15,h*.37);
+        const sheen=new T.Mesh(fixturePlane("reflection-"+key,w,length/sin,flip),contactMat);
+        sheen.rotation.x=-Math.PI/2;
+        sheen.position.set(x,worldY(feet,z)+.22,z+length/(2*sin));
+        stage.add(sheen);
+      }
+      contact(x,feet,z,w*1.18,Math.max(7,w*.14));
+      if (!key) continue;
+      const piece = new T.Mesh(fixturePlane(key,w,h/cos,flip), paintedFurniture);
+      piece.position.set(x,worldY(feet-h/2,z),z);
+      stage.add(piece);
+    }
   }
   function part(parent, shape, color, x, y, z, w, h, d, glow = 0) {
     const m = new T.Mesh(geometry[shape], material(color, glow));
@@ -412,24 +439,8 @@ const campusWorld = (() => {
   function geology(root) {
     const globe = new T.Group();
     root.add(globe);
-    part(globe, "stone", "#448c9c", 0, 0, 0, 19, 18, 19);
-    for (let i = 0; i < 7; i++) {
-      const a = i * 2.4,
-        y = -13 + i * 4,
-        rr = Math.sqrt(Math.max(0, 18 * 18 - y * y));
-      const rock = part(
-        globe,
-        "gem",
-        i % 2 ? "#939767" : "#ad9463",
-        rr * Math.cos(a),
-        y,
-        rr * Math.sin(a),
-        7,
-        4,
-        8,
-      );
-      rock.rotation.y = -a;
-    }
+    const surface=new T.MeshStandardMaterial({map:furnitureTexture,roughness:.77,metalness:.04});
+    globe.add(new T.Mesh(atlasUV(new T.SphereGeometry(18,28,18),"globe"),surface));
     const ring = part(root, "ring", "#cda66b", 0, 0, 0, 24, 24, 24, 0.08);
     ring.rotation.set(0.2, 0.1, 0.39);
     moving.push((t) => {
@@ -448,34 +459,23 @@ const campusWorld = (() => {
       cradle(figure);
       return;
     }
-    part(base, "drum", "#42555c", 0, 2, 0, 22, 4, 16);
-    part(base, "drum", "#b88c52", 0, 5, 0, 17, 2, 13);
-    part(base, "drum", "#78634f", 0, 12, 0, 3, 13, 3);
+    part(base, "drum", "#443745", 0, 1.8, 0, 18, 3.6, 12);
+    part(base, "drum", "#b08452", 0, 4.2, 0, 16, 1.6, 10.5);
+    part(base, "drum", "#674d46", 0, 12, 0, 2.5, 15, 2.5);
+    for (const y of [6,15,19]) part(base,"drum","#d3ad6f",0,y,0,4,1.6,4);
     const figure = new T.Group();
     base.add(figure);
-    figure.position.y = 41;
+    figure.position.y = 38;
     figureType(figure);
   }
-  function displayStand(x, feet, z, width, height) {
-    const root = group(x, feet, z),
-      body = "#484650",
-      trim = "#b38756";
-    part(root, "box", "#343943", 0, 2, 0, width, 4, 20);
-    part(root, "box", body, 0, height / 2, 0, width - 6, height - 4, 16);
-    for (const side of [-1, 1])
-      part(root, "box", trim, side * (width / 2 - 5), height / 2, 8, 1.5, height - 4, 1.5);
-    part(root, "box", "#865f46", 0, height - 1, 0, width, 3, 22);
-    part(root, "box", "#e0ba80", 0, height + 0.7, 0, width, 1.2, 22);
-    return feet - (height + 1.3) * cos;
-  }
-  function sealDisplay(x) {
-    const z = -93,
-      top = displayStand(x, 288, z, 79, 15),
-      frame = group(x, top, z);
-    part(frame, "box", "#a08052", 0, 12, 0, 72, 24, 5);
-    part(frame, "box", "#273e4b", 0, 12, 3, 69, 21, 2);
+  function sealDisplay(x, top, z) {
+    const frame = group(x, top, z);
+    part(frame, "box", "#79563c", 0, 12, 0, 72, 24, 5);
+    part(frame, "box", "#344756", 0, 12, 3, 69, 20, 2);
+    for (const y of [2.3,21.7]) part(frame,"box","#cba171",0,y,4,70,1.4,2);
     for (let i = 0; i < 4; i++) {
       const col = ["#8ed9fe", "#ce97ee", "#a5d884", "#ffc777"][i];
+      part(frame,"ring","#be9969",(i-1.5)*15.5,12,5,6,7.2,6);
       const gem = part(
         frame,
         "gem",
@@ -494,10 +494,19 @@ const campusWorld = (() => {
         });
     }
   }
+  function mountExhibits() {
+    for (const s of exhibitStations()) {
+      const z=(s.feet-GROUND)/sin+2, top=s.feet-s.h*.88;
+      if (s.seal) sealDisplay(s.x,top,z);
+      else specimen(s.subject,s.x,top,z,s.scale,
+        s.subject===0 && (scene.type==="floor" || s.x<worldWidth/2) ? cradle : specimens[s.subject]);
+    }
+  }
   function pennant3D(x, feet, z, scale, seed) {
     const root = group(x, feet, z);
     root.scale.setScalar(scale);
     part(root, "drum", "#64594b", 0, 47, 0, 1.35, 94, 1.35);
+    part(root,"drum","#745d48",0,1.5,0,4.4,3,4.4);
     part(root, "orb", "#ebc87b", 0, 96, 0, 2.3, 2.3, 2.3, 0.15);
     const cloth = new T.PlaneGeometry(30, 14, 9, 3);
     cloth.translate(15, 84, 0);
@@ -531,6 +540,7 @@ const campusWorld = (() => {
       pos.needsUpdate = true;
       cloth.computeVertexNormals();
     });
+    return root;
   }
   function particles3D(kind, count, range) {
     const root = new T.InstancedMesh(
@@ -579,28 +589,8 @@ const campusWorld = (() => {
       root.instanceMatrix.needsUpdate = true;
     });
   }
-  function bench(b, hall) {
-    const root = group(b.x, b.y, 0),
-      wood = hall ? "#a77346" : "#657a87",
-      edges = hall ? "#664732" : "#344352";
-    // The front lip coincides with the one-way collision surface.
-    part(root, "box", wood, 0, -2, -4, b.w, 4, 8);
-    for (const side of [-1, 1])
-      part(root, "box", edges, side * (b.w / 2 - 7), -(GROUND - b.y) / 2, -4, 4, GROUND - b.y, 5);
-    part(root, "box", edges, 0, -9, -6, b.w - 12, 2, 3);
-    if (hall) {
-      for (const s of [-1, 1]) part(root, "box", edges, s * (b.w / 2 - 7), 6, -9, 3, 13, 3);
-      part(root, "box", "#bb8752", 0, 10, -9, b.w - 3, 5, 2);
-    }
-  }
-  function steps(build) {
-    for (const stair of sideStairs[scene.type]) {
-      const w = scene.type === "arena" ? 122 : 126;
-      build.prop("steps-" + scene.type, stair.x, GROUND, w, -1, stair.side === "east");
-    }
-  }
   function panoramic(name, rate, top, bottom, depth, fx) {
-    const width = Math.max(680, W + Math.max(0, worldWidth - W) * rate + 12);
+    const width = panoramaWidth(rate);
     const back = new Surfaces();
     back.wall(name, -6, top, width, bottom - top, depth, full, fx);
     uniforms.panoramaWidth.value = width;
@@ -611,144 +601,66 @@ const campusWorld = (() => {
   function campus() {
     panoramic("school", 0.34, -7, 315, -360, 1);
     const ground = new Surfaces();
-    ground.floor("pavers", -200, Math.max(worldWidth, W) + 220, 293, 175, full);
-    const sides = new Surfaces(),
-      garden = new Surfaces();
-    const z = -78;
-    for (const [x, h] of [
-      [-25, 211],
-      [655, 180],
-      [1080, 216],
-    ]) {
-      const reg = campusAtlas.regions.tree;
-      sides.prop("tree", x, 286, (h * reg[2]) / reg[3], z, x > 600, 2);
+    const end=Math.max(worldWidth,W)+240;
+    ground.floor("pavers",-240,end,293,202,[.31,.01,.99,.79]);
+    for (let x=-240;x<end;x+=202)
+      ground.wall("pavers",x,289,202,5,-83,[.31,.82,.99,.99],4);
+    for (const stair of sideStairs.gate) {
+      ground.prop("steps-gate",stair.x,GROUND,126,0,stair.side==="east");
+      contact(stair.x,GROUND,0,132,12);
     }
-    parallax.push([sides.finish(), 0.74]);
-    for (const [x, flip] of [
-      [80, false],
-      [572, true],
-      [1071, false],
-    ])
-      garden.prop("fence", x, 298, 157, -48, flip);
-    for (const [x, w] of [
-      [-16, 76],
-      [154, 74],
-      [510, 70],
-      [845, 88],
-      [1127, 72],
-    ])
-      garden.prop("roses", x, 306, w, -31);
-    for (const x of [130, 553, 970]) garden.prop("lamp", x, 296, 32, -52);
-    parallax.push([garden.finish(), 0.93]);
-    steps(ground);
     ground.finish();
-    pennant3D(170, 294, -60, 0.85, 0.4);
-    pennant3D(519, 294, -60, 0.85, 2.4);
+    for (const rate of [.78,1]) {
+      const layer = new T.Group(), planting = new Surfaces();
+      stage.add(layer);
+      for (const [name,x,feet,w,speed,flip] of campusGarden) {
+        if (speed !== rate) continue;
+        const z=(feet-GROUND)/sin;
+        planting.prop(name,x,feet,w,z,flip,name==="tree"?2:0);
+        const shade = name==="tree" ? w*.7 : name==="lamp" ? 16 : w;
+        contact(x,feet,z,shade,Math.max(5,shade*.12),layer);
+      }
+      planting.finish(layer);
+      parallax.push([layer,rate]);
+    }
+    pennant3D(566, 294, -78, .59, .4);
+    pennant3D(729, 294, -78, .59, 2.4);
     particles3D("leaves", 31, Math.max(W, worldWidth));
   }
   function hallway() {
-    const art = new Surfaces(),
-      bays = hallBays[scene.floor],
-      back = -139;
-    art.floor("corridor", -260, Math.max(worldWidth, W) + 260, 274.5, 232, [0.07, 0.775, 0.94, 0.99]);
-    for (let x = -160; x < Math.max(worldWidth, W) + 160; x += 158)
-      art.wall("corridor", x, 0, 158, 80, back, [0, 0, 0.265, 80 / H], 3);
-    for (let i = 0; i < bays.length; i++) {
-      const b = bays[i],
-        l = i ? hallBoundary(bays[i - 1], b) : 0,
-        r = i + 1 < bays.length ? hallBoundary(b, bays[i + 1]) : worldWidth;
-      if (b.type === "stair") {
-        art.wall(
-          "stairhall",
-          l,
-          80,
-          r - l,
-          195,
-          back,
-          b.side === "east" ? [1, 80 / H, 0, 275 / H] : [0, 80 / H, 1, 275 / H],
-          3,
-        );
+    const art = new Surfaces(), back = -139;
+    const boards=new T.Texture(hallFloorPainting());
+    boards.colorSpace=T.SRGBColorSpace;
+    boards.minFilter=boards.magFilter=T.NearestFilter;
+    boards.generateMipmaps=false; boards.needsUpdate=true;
+    const groundMat=new T.MeshBasicMaterial({map:boards,toneMapped:false});
+    groundMat.addEventListener("dispose",()=>boards.dispose());
+    const boardsMesh=new T.Mesh(new T.PlaneGeometry(worldWidth,(H+2-275)/sin),groundMat);
+    boardsMesh.rotation.x=-Math.PI/2;
+    boardsMesh.position.set(worldWidth/2,worldY(GROUND,0),((H+2+275)/2-GROUND)/sin);
+    stage.add(boardsMesh);
+    for (let x = -160; x < Math.max(worldWidth,W)+160; x+=158)
+      art.wall("corridor",x,0,158,80,back,[0,0,.265,80/H],3);
+    for (const {asset,x,w,u,v,door} of hallwaySections()) {
+      if (!door) {
+        art.wall(asset,x,80,w,195,back,[u,80/H,v,275/H],3);
         continue;
       }
-      // The door slides behind its right jamb as the player approaches.
-      const span = Math.min(29, (b.x - l) * 0.7, (r - b.x) * 0.7),
-        doorL = b.x - span,
-        doorR = b.x + span;
-      const left = Math.max(l, b.x - 113),
-        right = Math.min(r, b.x + 113);
-      for (const [a, e] of [
-        [l, left],
-        [right, r],
-      ]) {
-        const num = Math.ceil((e - a) / 145);
-        for (let j = 0; j < num; j++) {
-          const w = (e - a) / num,
-            halfCrop = 0.127 * Math.min(1, w / 132);
-          art.wall(
-            "corridor",
-            a + w * j,
-            80,
-            w,
-            195,
-            back,
-            [0.449 - halfCrop, 80 / H, 0.449 + halfCrop, 275 / H],
-            3,
-          );
-        }
-      }
-      art.wall("corridor", left, 80, doorL - left, 195, back, [0, 80 / H, 0.183, 275 / H], 3);
-      art.wall("corridor", doorR, 80, right - doorR, 195, back, [0.297, 80 / H, 0.5, 275 / H], 3);
-      art.wall("corridor", doorL, 80, span * 2, 64, back, [0.183, 80 / H, 0.297, 0.4], 3);
-      const inside = b.name === "물리지학실" ? "physics" : b.name === "생명화학실" ? "chem" : "classroom";
-      art.wall(inside, doorL - 2, 143, span * 2 + 4, 132, back - 8, [0.19, 0, 0.86, 1], 3);
-      const door = new Surfaces();
-      door.wall("corridor", doorL, 144, span * 2, 131, back - 3, [0.183, 0.4, 0.297, 0.763], 3);
-      const slab = door.finish();
-      moving.push(() => {
-        const f = Math.max(0, 1 - Math.abs(player.x - b.x) / 87);
-        slab.position.x = span * 1.65 * f * f * (3 - 2 * f);
-      });
+      art.wall(asset,x,80,w,64,back,[u,80/H,v,144/H],3);
+      if (door.classroom) {
+        const [sx,sy,sw,sh]=door.classroom;
+        classroomPanel({sx,sy,sw,sh,x:x-2,y:143,w:w+4,h:132,z:back-8});
+      } else art.wall(door.inside,x-2,143,w+4,132,back-8,[.48-door.view/2,.12,.48+door.view/2,.91],3);
+      const panel=new Surfaces();
+      panel.wall(asset,x,144,w,131,back-3,[u,144/H,v,275/H],3);
+      const slab=panel.finish();
+      moving.push(()=>{slab.position.x=doorTravel(door.x,w)});
     }
     art.finish();
-    if (scene.floor === 1) sealDisplay(775);
-    else {
-      const discipline = scene.floor - 2;
-      for (const x of [477, 1730]) {
-        const top = displayStand(x, 285, back + 35, 48, 19);
-        specimen(discipline, x, top, back + 35, 0.67, discipline === 0 ? cradle : specimens[discipline]);
-      }
-    }
-    // Window light falls on the floor at the same intervals as classroom bays.
-    const sunMat = new T.MeshBasicMaterial({
-      color: ["#ffe6a2", "#ffe6a2", "#ffe0a1", "#edc2e1", "#dbefab", "#f3c388"][scene.floor],
-      transparent: true,
-      opacity: 0.14,
-      depthWrite: false,
-      side: T.DoubleSide,
-    });
-    for (const b of bays.filter((b) => b.type === "room")) {
-      const y = worldY(GROUND, 0) + 0.18;
-      const g = new T.BufferGeometry();
-      g.setAttribute(
-        "position",
-        new T.Float32BufferAttribute(
-          [b.x - 87, y, -125, b.x - 63, y, -125, b.x - 139, y, 93, b.x - 111, y, 93],
-          3,
-        ),
-      );
-      g.setIndex([0, 1, 2, 2, 1, 3]);
-      const patch = new T.Mesh(g, sunMat);
-      stage.add(patch);
-      moving.push((t) => {
-        patch.position.x = Math.sin(t * 0.25 + b.x * 0.002) * 4;
-      });
-    }
-    moving.push((t) => {
-      sunMat.opacity = 0.1 + 0.06 * (0.5 + 0.5 * Math.sin(t * 0.42));
-    });
+    mountExhibits();
     particles3D("dust", 23, worldWidth);
   }
-  function classroom() {
+  function classroomPanel(p) {
     const art = assets.classrooms;
     if (!classroomTexture) {
       classroomTexture = new T.Texture(art);
@@ -757,22 +669,23 @@ const campusWorld = (() => {
       classroomTexture.generateMipmaps = false;
       classroomTexture.needsUpdate = true;
     }
-    for (const p of classroomPanels()) {
-      const plane = new T.PlaneGeometry(p.w, p.h / cos);
-      const uv = plane.getAttribute("uv");
-      for (let i = 0; i < uv.count; i++) {
-        const u = (p.sx + .5 + uv.getX(i) * (p.sw - 1)) / art.width;
-        const v = 1 - (p.sy + .5 + (1 - uv.getY(i)) * (p.sh - 1)) / art.height;
-        uv.setXY(i, u, v);
-      }
-      const mat = new T.MeshBasicMaterial({map: classroomTexture, transparent: p.z === 0, toneMapped: false});
-      const planeMesh = new T.Mesh(plane, mat);
-      planeMesh.position.set(p.x + p.w / 2, worldY(p.y + p.h / 2, p.z), p.z);
-      stage.add(planeMesh);
+    const plane = new T.PlaneGeometry(p.w, p.h / cos);
+    const uv = plane.getAttribute("uv");
+    for (let i = 0; i < uv.count; i++) {
+      const u = (p.sx + .5 + uv.getX(i) * (p.sw - 1)) / art.width;
+      const v = 1 - (p.sy + .5 + (1 - uv.getY(i)) * (p.sh - 1)) / art.height;
+      uv.setXY(i, u, v);
     }
-
+    const mat = new T.MeshBasicMaterial({map: classroomTexture, alphaTest: p.z === 0 ? .35 : 0, toneMapped: false});
+    const planeMesh = new T.Mesh(plane, mat);
+    planeMesh.position.set(p.x + p.w / 2, worldY(p.y + p.h / 2, p.z), p.z);
+    stage.add(planeMesh);
+  }
+  function classroom() {
+    for (const p of classroomPanels()) classroomPanel(p);
     // A student-made mobile hangs in the window. Its pieces swing from fixed strings.
-    const mobile = group(268 + 5 * scene.room, 49, -160);
+    const mobile = group(268 + 5 * scene.room, 53, -160);
+    part(mobile, "drum", "#775a3d", 0, 0, 0, 2.6, 2, 2.6);
     part(mobile, "box", "#997a54", 0, -6, 0, 1, 12, 1);
     const bar = new T.Group(); bar.position.y = -12; mobile.add(bar);
     part(bar, "box", "#ac8963", 0, 0, 0, 30, 1.4, 1.4);
@@ -788,33 +701,17 @@ const campusWorld = (() => {
     particles3D("dust", 22, worldWidth);
   }
   function laboratory() {
-    const name = ["physics", "chem", "bio", "earth"][scene.subject];
+    const name = labPaint[scene.subject];
     panoramic(name, 0.51, -12, 343, -270, 6);
     const tiles = new Surfaces();
     tiles.panoramaFloor(
       name,
       -12,
       343,
-      [0.75, 0.75, 0.77, 0.73][scene.subject],
-      [0.892, 0.89, 0.891, 0.851][scene.subject],
+      ...labFloorCuts[scene.subject],
     );
-    steps(tiles);
     tiles.finish();
-    for (const [x, size] of [
-      [336, 1.06],
-      [883, 0.7],
-    ]) {
-      const z = -110,
-        top = displayStand(x, 285, z, 69 * size, 21);
-      specimen(
-        scene.subject,
-        x,
-        top,
-        z,
-        size,
-        scene.subject === 0 && x === 336 ? cradle : specimens[scene.subject],
-      );
-    }
+    mountExhibits();
     particles3D(["sparks", "bubbles", "pollen", "stars"][scene.subject], 35, worldWidth);
   }
   function rooftop() {
@@ -822,11 +719,12 @@ const campusWorld = (() => {
       width = panoramic(sky, 0.38, -5, 352, -340, 5);
     const tiles = new Surfaces();
     tiles.panoramaFloor(sky, -5, 352, 0.785, 0.885);
-    steps(tiles);
     tiles.finish();
-    pennant3D(179, 263, -135, 0.7, 0.6);
+    // Bolt the mast onto the painted fence post. They share the panorama's scroll rate.
+    const flag = pennant3D(width*.247-6,255,-235,.57,.6);
+    parallax.push([flag,.38,flag.position.x]);
     if (!progress.won) {
-      const rift = group(width * 0.662, 58, -252);
+      const rift = group(width*.646-6,65,-252);
       parallax.push([rift, 0.38, rift.position.x]);
       const orbit = new T.Group();
       rift.add(orbit);
@@ -866,7 +764,6 @@ const campusWorld = (() => {
     geometry = {
       box: new T.BoxGeometry(),
       orb: new T.SphereGeometry(1, 12, 8),
-      stone: new T.IcosahedronGeometry(1, 1),
       gem: new T.OctahedronGeometry(),
       drum: new T.CylinderGeometry(1, 1, 1, 12),
       ring: new T.TorusGeometry(1, 0.036, 5, 40),
@@ -875,25 +772,40 @@ const campusWorld = (() => {
     stage.background = new T.Color(
       scene.type === "floor" ? "#cab99c" : scene.type === "gate" ? "#a1cbe2" : "#28283f",
     );
-    const sky = new T.HemisphereLight(scene.type === "arena" ? "#c5d8ff" : "#fff3d6", "#8b796e", 1.75);
+    if (!furnitureTexture) {
+      furnitureTexture=new T.Texture(furniturePaint);
+      furnitureTexture.colorSpace=T.SRGBColorSpace;
+      furnitureTexture.minFilter=furnitureTexture.magFilter=T.NearestFilter;
+      furnitureTexture.generateMipmaps=false;
+      furnitureTexture.needsUpdate=true;
+    }
+    paintedFurniture=new T.MeshBasicMaterial({map:furnitureTexture,alphaTest:.35,toneMapped:false});
+    contactMat=new T.MeshBasicMaterial({map:furnitureTexture,transparent:true,depthWrite:false,toneMapped:false});
+    materials.set("furniture",paintedFurniture);
+    materials.set("contact",contactMat);
+    const [key,fill,bounce,rim,dir]=environmentLight();
+    const sky = new T.HemisphereLight(fill,bounce,1.04);
     stage.add(sky);
-    const sun = new T.DirectionalLight(scene.type === "roof" && !progress.won ? "#f1b5cf" : "#fff0ca", 2.0);
-    sun.position.set(-180, 340, 280);
+    const sun = new T.DirectionalLight(key,2.25);
+    sun.position.set(-dir*210,320,225);
     stage.add(sun);
+    const edge = new T.DirectionalLight(rim, .68);
+    edge.position.set(dir*180,140,-110);
+    stage.add(edge);
     if (scene.type === "gate") campus();
     else if (scene.type === "floor") hallway();
     else if (scene.type === "classroom") classroom();
     else if (scene.type === "arena") laboratory();
     else rooftop();
-    if (scene.type !== "classroom") for (const b of platforms()) bench(b, scene.type === "floor");
+    dressFloor();
     if (canvas.width !== W || canvas.height !== H) renderer.setSize(W, H, false);
     camera.left = -W / 2;
     camera.right = W / 2;
     camera.updateProjectionMatrix();
   }
   function draw(shakeX) {
-    if (unavailable || lost || !image.complete || !image.naturalWidth) return false;
-    if (scene.type === "classroom" && !assets.classrooms.naturalWidth) {
+    if (unavailable || lost || !image.naturalWidth || !furniturePaint.naturalWidth) return false;
+    if ((scene.type === "classroom" || (scene.type === "floor" && scene.floor >= 3)) && !assets.classrooms.naturalWidth) {
       canvas.hidden = true;
       lastKey = "";
       return false;
@@ -931,6 +843,8 @@ const campusWorld = (() => {
       uniforms.theme.value = scene.type === "floor" ? scene.floor : 0;
       uniforms.discipline.value = scene.subject;
       uniforms.warning.value = warning;
+      // Reflected room light also reaches the painted wood and metal on the walking plane.
+      paintedFurniture.color.setRGB(1+.052*warning,1+.014*warning,1+.065*warning);
       parallax.forEach(([mesh, rate, base = 0]) => {
         mesh.position.x = base + cam * (1 - rate);
       });

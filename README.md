@@ -36,7 +36,9 @@
 
 3~5층에는 학년별로 1~7반, 총 21개 교실이 있습니다. 복도에서 반 이름이 붙은 문 앞에 서서 ↑를 누르면 들어갑니다. 교실 가운데 칠판에서 ↑로 그 반의 관찰 메모를 읽을 수 있습니다. 앞문과 뒷문은 모두 들어왔던 반의 복도 문으로 이어지며, 교실 안에서 게임을 닫아도 같은 반에서 이어집니다. [교실 게임 화면](art/classroom-preview.webp) · [교실 배경과 책상 원화 제작 기록](art/classroom-art.md)
 
-Three.js 장면과 조명, 움직임은 `map3d.js`에서 수정합니다. `assets/world/atlas.js`에는 배경과 소품의 텍스처 및 픽셀 좌표가 들어 있습니다. Three.js r187은 게임과 함께 배포됩니다. WebGL 2를 쓸 수 없는 브라우저에서는 Canvas 2D 배경으로 플레이할 수 있습니다. [Three.js 라이선스](vendor/three-LICENSE.txt)
+복도 벤치의 등받이와 좌판, 과학실의 전시대와 점프 발판은 각각 플레이어가 지나가거나 올라서는 높이에 맞춰 그렸습니다. 창문 아래로 들어오는 빛은 복도 마루까지 이어집니다. 옥상의 구조물은 균열이 열린 밤과 엔딩 뒤의 아침에 서로 다른 빛을 받습니다. [같은 위치에서 본 수정 전후](art/campus-structures.webp)
+
+Three.js 장면과 실험 장치의 움직임은 `map3d.js`에서 수정합니다. WebGL 2를 쓸 수 없는 브라우저는 Canvas 2D로 전환하며, 두 방식 모두 `scenery.js`의 배치 좌표와 같은 배경·가구 원화를 사용합니다. [가구 원화와 제작 방법](art/campus-structures.md) · [Three.js 라이선스](vendor/three-LICENSE.txt)
 
 ## 전투 이펙트
 

@@ -216,13 +216,40 @@ function backdrop(name, w, h, offset, dressTile) {
     g.restore();
   }
 }
+// Draw a matching slice of the scenery atlas when WebGL is unavailable.
+function paintedSlice(name,x,y,w,h,u=0,t=0,v=1,b=1) {
+  if (!schoolPaint.naturalWidth || x+w<0 || x>W) return;
+  const [sx,sy,sw,sh]=campusAtlas.regions[name], left=Math.round(x), right=Math.round(x+w);
+  g.save();
+  g.translate(u>v ? right : left,Math.round(y));
+  if (u>v) g.scale(-1,1);
+  g.drawImage(schoolPaint,sx+Math.min(u,v)*sw,sy+t*sh,Math.abs(v-u)*sw,(b-t)*sh,
+    0,0,right-left,Math.round(y+h)-Math.round(y));
+  g.restore();
+}
 function gate(depth) {
   if (!depth) {
-    backdrop("campus", clamp(W, 670, 920), H, cam * 0.58, (w) => {
-      pennant(w * .11, 294, 70, sceneryTime, "#27467b");
-      pennant(w * .91, 294, 74, sceneryTime + .5, "#46618f");
-    });
+    if (schoolPaint.naturalWidth) {
+      paintedSlice("school",-6-cam*.34,-7,panoramaWidth(.34),322);
+      for (let x=-240+Math.floor((cam+240)/202)*202;x<cam+W;x+=202) {
+        paintedSlice("pavers",x-cam,293,202,H+2-293,.31,.01,.99,.79);
+        paintedSlice("pavers",x-cam,289,202,5,.31,.82,.99,.99);
+      }
+      for (const [name,wx,feet,w,rate,flip] of campusGarden) {
+        const x=wx-cam*rate,[,,sw,sh]=campusAtlas.regions[name],h=w*sh/sw;
+        if (x+w/2<0 || x-w/2>W) continue;
+        const shade=name==="tree"?w*.7:name==="lamp"?16:w;
+        groundContact(x+shade*.035,feet,shade,Math.max(5,shade*.12));
+        cropStamp(schoolPaint,campusAtlas.regions,name,x-w/2,feet-h,w,h,flip);
+      }
+      for (const x of [566,729]) pennant(x-cam,294,55,sceneryTime+x,"#44638c");
+    } else backdrop("campus",clamp(W,670,920),H,cam*.58,()=>{});
     campusAir(sceneryTime);
+    for (const stair of sideStairs.gate) {
+      const x=stair.x-cam, [,,sw,sh]=campusAtlas.regions["steps-gate"], h=126*sh/sw;
+      groundContact(x+4,GROUND,132,12);
+      cropStamp(schoolPaint,campusAtlas.regions,"steps-gate",x-63,GROUND-h,126,h,stair.side==="east");
+    }
   }
   const sx = 650 - cam;
   entranceLight(sx, GROUND, sceneryTime);
@@ -237,25 +264,6 @@ function gate(depth) {
       ],
       "#e3c582",
     );
-  }
-}
-function endStairArt() {
-  const tile = assets["stair/" + scene.type];
-  if (!tile?.naturalWidth) return;
-  const width = scene.type === "arena" ? 122 : 126;
-  const height = Math.round((width * tile.naturalHeight) / tile.naturalWidth);
-  for (const stair of sideStairs[scene.type]) {
-    const x = Math.round(stair.x - cam);
-    if (x + width / 2 < 0 || x - width / 2 > W) continue;
-    g.save();
-    g.translate(x, GROUND);
-    if (stair.side === "east") g.scale(-1, 1);
-    g.fillStyle = scene.type === "gate" ? "#54443045" : "#18182d56";
-    g.beginPath();
-    g.ellipse(0, -1, width * 0.45, 2.3, 0, 0, Math.PI * 2);
-    g.fill();
-    g.drawImage(tile, -width / 2, -height, width, height);
-    g.restore();
   }
 }
 function hallBoundary(left, right) {
@@ -280,118 +288,36 @@ function hallPlaque(bay, x) {
   word(title, x, 97, 9, "#faf0d8");
 }
 function hallBackdrop() {
-  const im = assets.corridor,
-    bays = hallBays[scene.floor],
-    stairTile = assets["stair/hall"];
-  if (!im.naturalWidth) {
-    r(0, 0, W, H, "#adbcab");
+  if (!schoolPaint.naturalWidth) {
+    backdrop("corridor",540,H,cam,()=>{});
     return;
   }
-  // Repeat the floor and the complete light fixture independently of room widths.
-  const repeatWidth = Math.round((H * im.width) / im.height);
-  for (
-    let x = Math.floor(cam / repeatWidth) * repeatWidth;
-    x < cam + W;
-    x += repeatWidth
-  )
-    g.drawImage(im, Math.round(x - cam), 0, repeatWidth, H);
-  const wallTop = 80,
-    wallBase = 275;
-  const lampWidth = 158;
-  for (let x = Math.floor(cam / lampWidth) * lampWidth; x < cam + W; x += lampWidth) {
-    g.drawImage(im, 0, 0, im.width * 0.265, im.height * wallTop / H,
-      Math.round(x - cam), 0, lampWidth, wallTop);
-  }
-  for (let j = 0; j < bays.length; j++) {
-    const bay = bays[j],
-      left = j ? hallBoundary(bays[j - 1], bay) : 0,
-      right = j + 1 < bays.length ? hallBoundary(bay, bays[j + 1]) : worldWidth;
-    if (right < cam || left > cam + W) continue;
-    const x = Math.round(bay.x - cam),
-      lx = Math.round(left - cam),
-      rx = Math.round(right - cam);
-    const isStair = bay.type === "stair" && stairTile.naturalWidth;
-    const tile = isStair ? stairTile : im,
-      tw = isStair ? tile.width : im.width / 2;
-    const tx = isStair ? 0 : j % 2 ? 0 : tw,
-      ty = (tile.height * wallTop) / H,
-      th = (tile.height * (wallBase - wallTop)) / H;
-    g.save();
-    if (isStair) {
-      if (bay.side === "east") {
-        g.translate(lx + rx, 0);
-        g.scale(-1, 1);
-      }
-      g.drawImage(
-        tile,
-        0,
-        ty,
-        tw,
-        th,
-        lx,
-        wallTop,
-        rx - lx,
-        wallBase - wallTop,
-      );
-    } else {
-      // Insert window bays in long stretches rather than widening the doors or lights.
-      const doorLeft = Math.max(lx, x - 118),
-        doorRight = Math.min(rx, x + 118);
-      for (const [start, end] of [
-        [lx, doorLeft],
-        [doorRight, rx],
-      ]) {
-        const count = Math.ceil((end - start) / 142);
-        for (let k = 0; k < count; k++) {
-          const a = Math.round(start + (k * (end - start)) / count);
-          const b = Math.round(start + ((k + 1) * (end - start)) / count);
-          g.drawImage(
-            im,
-            im.width * 0.322,
-            ty,
-            im.width * 0.254,
-            th,
-            a,
-            wallTop,
-            b - a,
-            wallBase - wallTop,
-          );
-        }
-      }
-      const half = tw / 2;
-      g.drawImage(
-        tile,
-        tx,
-        ty,
-        half,
-        th,
-        doorLeft,
-        wallTop,
-        x - doorLeft,
-        wallBase - wallTop,
-      );
-      g.drawImage(
-        tile,
-        tx + half,
-        ty,
-        half,
-        th,
-        x,
-        wallTop,
-        doorRight - x,
-        wallBase - wallTop,
-      );
+  g.drawImage(hallFloorPainting(),Math.round(-cam),275,worldWidth,H-275);
+  for (let x=-160+Math.floor((cam+160)/158)*158; x<cam+W; x+=158)
+    paintedSlice("corridor",x-cam,0,158,80,0,0,.265,80/H);
+  for (const {asset,x:wx,w,u,v,door} of hallwaySections()) {
+    const x=wx-cam;
+    if (x+w<0 || x>W) continue;
+    if (!door) {
+      paintedSlice(asset,x,80,w,195,u,80/H,v,275/H);
+      continue;
     }
-    g.restore();
-    if (bay.type !== "stair")
-      corridorExhibit(x, left, right, j - 1, sceneryTime);
+    paintedSlice(asset,x,80,w,64,u,80/H,v,144/H);
+    if (door.classroom && assets.classrooms.naturalWidth)
+      g.drawImage(assets.classrooms,...door.classroom,Math.round(x),144,Math.round(w),131);
+    else paintedSlice(door.inside,x,144,w,131,.48-door.view/2,.12,.48+door.view/2,.91);
+    const slide=doorTravel(door.x,w);
+    paintedSlice(asset,x+slide,144,w-slide,131,u,144/H,v-(v-u)*slide/w,275/H);
   }
+  drawFixtures2D();
 }
 function hall(depth) {
   if (!depth) hallBackdrop();
-  for (const bay of hallBays[scene.floor]) {
+  const bays=hallBays[scene.floor];
+  for (const [i,bay] of bays.entries()) {
     const x = Math.round(bay.x - cam);
     if (x < -90 || x > W + 90) continue;
+    if (bay.type!=="stair") corridorExhibit(x,hallBoundary(bay,bays[i+1])-hallBoundary(bays[i-1],bay),i-1,sceneryTime);
     hallPlaque(bay, x);
     if (["물리지학실", "생명화학실", "중앙 현관", "매점"].includes(bay.name))
       star(x, GROUND - 46 + Math.sin(sceneryTime * 2) * 1.4, 5, "#ffe593");
@@ -424,51 +350,53 @@ function classroomInterior(depth) {
   if (!depth) {
     r(0, 0, W, H, "#28283f");
     const art = assets.classrooms;
-    if (art.naturalWidth) for (const p of classroomPanels())
-      g.drawImage(art, p.sx, p.sy, p.sw, p.sh, Math.round(p.x - cam), p.y, p.w, p.h);
+    if (art.naturalWidth) for (const p of classroomPanels()) {
+      g.drawImage(art,p.sx,p.sy,p.sw,p.sh,Math.round(p.x-cam),p.y,p.w,p.h);
+      if (p.z<0) drawFixtures2D();
+    }
     for (let i = 0; i < 16; i++) {
       const x = (i*141 + sceneryTime*3) % worldWidth - cam;
       const y = 145 + Math.sin(sceneryTime*.55+i)*13 + (i*23)%95;
       r(x,y,2,1,"#fbe7af");
     }
   }
-  const sill = scene.floor === 5 ? 251 : 254;
   for (const door of sideStairs.classroom) {
     const x = door.x - cam;
     if (x < -45 || x > W+45) continue;
-    // Small wood-and-stone steps belong to the door threshold, behind the walking aisle.
-    r(x-32,sill+2,64,4,"#84775f");
-    r(x-32,sill+2,64,1,"#c4af8a");
-    r(x-29,sill-1,58,4,"#8e795c");
-    r(x-29,sill-1,58,1,"#d5b78b");
     label(door.name,x,48,"#f5e8c4","#41534b",8);
   }
   const boardX = classroomBoard.x - cam;
-  if (boardX > -90 && boardX < W+90)
+  if (boardX > -120 && boardX < W+120) {
+    g.save();
+    g.translate(Math.round(boardX+62),153);
+    g.scale(.44,.44);
+    g.globalAlpha=.65;
+    chalkExperiment(0,0,sceneryTime,(scene.floor+scene.room)%4);
+    g.restore();
     word(floorName(),boardX,132,13,"#ebead9");
+  }
 }
 
 function battleBack() {
   const roof = scene.type === "roof";
-  backdrop(roof ? "roof" : "lab", clamp(W, 680, 960), H, cam * .32, (w) => {
-    if (roof) roofSky(0, w, sceneryTime, progress.won);
-    else {
-      chalkExperiment(w * .53, 168, sceneryTime, scene.subject);
-      labExhibit(w * .37, 234, sceneryTime, scene.subject);
-      // Each discipline lights the existing brass instrument above the blackboard.
-      const cx = w * .5, cy = 81, c = subjects[scene.subject].color;
-      for (let i = 0; i < 3; i++) {
-        const angle = sceneryTime * .7 + i * Math.PI * 2 / 3;
-        star(cx + Math.cos(angle) * w * .056, cy + Math.sin(angle) * 29, 2, c);
-      }
+  const name=roof ? (progress.won?"morning":"roof") : labPaint[scene.subject];
+  const rate=roof ? .38 : .51, width=panoramaWidth(rate), top=roof?-5:-12, bottom=roof?352:343;
+  const left=-6-cam*rate;
+  if (schoolPaint.naturalWidth) {
+    paintedSlice(name,left,top,width,bottom-top);
+    const [start,end]=roof?[.785,.885]:labFloorCuts[scene.subject];
+    const back=top+(bottom-top)*start;
+    for (let y=back;y<H;y+=4) {
+      const strip=Math.min(4,H-y), t=(y-back)/(H+2-back), u=(y+strip-back)/(H+2-back);
+      const offset=left-t*.16*(cam+W*.5-width*.5);
+      const a=start+t*(end-start), b=start+u*(end-start);
+      paintedSlice(name,offset,y,width,strip,0,a,1,b);
+      if (offset>0) paintedSlice(name,offset-width,y,width,strip,1,a,0,b);
+      if (offset+width<W) paintedSlice(name,offset+width,y,width,strip,1,a,0,b);
     }
-  });
-  if (!roof) {
-    let c = ["#4188ad", "#a45ca7", "#4d9e5c", "#e29b4e"][scene.subject];
-    g.globalAlpha = 0.085;
-    r(0, 0, W, H, c);
-    g.globalAlpha = 1;
-  }
+    if (roof) roofSky(left,width,sceneryTime,progress.won);
+  } else backdrop(roof?"roof":"lab",width,H,cam*rate,()=>{});
+  drawFixtures2D();
   for (let i = 0; i < 22; i++) {
     let x = wrap(i * 107 - cam * 0.3, W),
       y = wrap(i * 37 - sceneryTime * (4 + (i % 4)), 212);
@@ -477,35 +405,23 @@ function battleBack() {
   }
   g.globalAlpha = 1;
 }
-function drawPlatforms() {
-  const wood = scene.type === "floor",
-    roof = scene.type === "roof";
-  for (const b of platforms()) {
-    const x = Math.round(b.x - cam - b.w / 2),
-      y = b.y;
-    if (x > W || x + b.w < 0) continue;
-    const edge = wood ? "#533c32" : "#273342",
-      light = wood ? "#e3b373" : roof ? "#aa9eb2" : "#a9c1c3",
-      face = wood ? "#926c4e" : roof ? "#67667e" : "#647c88";
-    r(x + 1, GROUND - 2, b.w, 3, "#38344945");
-    for (const side of [6, b.w - 12]) {
-      r(x + side, y + 3, 6, GROUND - y - 2, edge);
-      r(x + side + 1, y + 5, 2, GROUND - y - 6, face);
-    }
-    r(x, y, b.w, 6, edge);
-    r(x + 1, y, b.w - 2, 2, light);
-    r(x + 2, y + 2, b.w - 4, 2, face);
-    if (wood) {
-      r(x + 5, y - 14, 3, 14, edge);
-      r(x + b.w - 8, y - 14, 3, 14, edge);
-      r(x + 2, y - 13, b.w - 4, 6, edge);
-      r(x + 3, y - 13, b.w - 6, 2, light);
-      r(x + 3, y - 11, b.w - 6, 2, face);
-    } else {
-      r(x + 7, y + 8, b.w - 15, 4, face);
-      r(x + 9, y + 9, b.w - 19, 1, light);
-      for (let k = 9; k < b.w - 5; k += 15) r(x + k, y + 3, 2, 1, light);
-    }
+function drawFixtures2D() {
+  const dir=environmentLight()[4];
+  for (const item of mapFixtures()) {
+    const {key,feet,w,h,flip}=item,x=item.x-cam;
+    if (x+w<0 || x-w>W) continue;
+    const width=w*1.18;
+    if (key && fixtureAtlas.regions["reflection-"+key])
+      cropStamp(furniturePaint,fixtureAtlas.regions,"reflection-"+key,x-w/2,feet,w,Math.min(15,h*.37),flip);
+    groundContact(x+dir*width*.035,feet,width,Math.max(7,w*.14),dir<0);
+    if (key) cropStamp(furniturePaint,fixtureAtlas.regions,key,x-w/2,feet-h,w,h,flip);
+    if (item.seal) {
+      r(x-34,feet-h-19,68,20,"#a37c50"); r(x-32,feet-h-17,64,16,"#344951");
+      for (let i=0;i<4;i++) {
+        const cx=x+(i-1.5)*15,cy=feet-h-9;
+        path([[cx,cy-5],[cx+4,cy],[cx,cy+5],[cx-4,cy]],progress.cleared.includes(i)?subjects[i].color:"#62666a");
+      }
+    } else if (item.subject!==undefined) labExhibit(x,feet-h*.88,sceneryTime,item.subject);
   }
 }
 function character() {
@@ -753,10 +669,6 @@ function render() {
   else if (scene.type === "floor") hall(depth);
   else if (scene.type === "classroom") classroomInterior(depth);
   else if (!depth) battleBack();
-  if (!depth && scene.type !== "classroom") {
-    if (scene.type !== "floor") endStairArt();
-    drawPlatforms();
-  }
   drawCombatGround();
   monsters();
   character();

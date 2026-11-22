@@ -85,11 +85,6 @@ assets.combat = new Image();
 assets.combat.src = "assets/combat/effects.webp";
 assets.spellFX = new Image();
 assets.spellFX.src = "assets/combat/pixelfx.webp";
-for (const theme of ["hall", "gate", "arena", "roof"]) {
-  const tile = new Image();
-  tile.src = "assets/stairs/" + theme + ".webp";
-  assets["stair/" + theme] = tile;
-}
 let panelSince = 0;
 let returnFocus = null;
 let saveMessage = "자동 저장";

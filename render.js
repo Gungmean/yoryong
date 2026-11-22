@@ -424,6 +424,50 @@ function drawFixtures2D() {
     } else if (item.subject!==undefined) labExhibit(x,feet-h*.88,sceneryTime,item.subject);
   }
 }
+// One pixel per cell. The same cut-gold pointer rotates only in quarter turns.
+const compassArrow = (() => {
+  const rows = [
+    "          nn        ",
+    "          nwn       ",
+    "          nwwn      ",
+    "  nn nnnnnnwwwn     ",
+    " ntntnwwwwwwwwwn    ",
+    "naantnffffffffffn   ",
+    "nttntnfffffffffffn  ",
+    " naananbbbbbbbbbn   ",
+    "  nn nnnnnnbbbbn    ",
+    "          nbbbn     ",
+    "          nbbn      ",
+    "          nbn       ",
+    "          nn        ",
+  ];
+  const colors = { n: "#293045", w: "#fff5c4", f: "#ffd264", b: "#d99735", t: "#80c6b7", a: "#558986" };
+  const sprite = document.createElement("canvas");
+  sprite.width = rows[0].length; sprite.height = rows.length;
+  const brush = sprite.getContext("2d");
+  rows.forEach((row, y) => [...row].forEach((pixel, x) => {
+    if (colors[pixel]) { brush.fillStyle = colors[pixel]; brush.fillRect(x, y, 1, 1); }
+  }));
+  return sprite;
+})();
+function besideQuestTarget() {
+  return near && activeLeg && near.type === activeLeg.point.type && near.x === activeLeg.point.x;
+}
+function drawQuestArrow(x) {
+  const leg = activeLeg;
+  if (!leg || modal || leg.point.dying) return;
+  const dx = leg.point.x - player.x;
+  const atPoint = besideQuestTarget();
+  const bossInReach = leg.point.boss && Math.abs(dx) < 50;
+  const turn = atPoint ? -1 : (Math.abs(dx) < 10 || bossInReach) ? 1 : dx < 0 ? 2 : 0;
+  const bob = reducedMotion.matches ? 0 : Math.round(Math.sin(clock * 3.5) * 1.5);
+  const y = Math.max(13, player.y - (atPoint ? 96 : 72) + bob);
+  g.save();
+  g.translate(Math.round(x), Math.round(y));
+  g.rotate(turn * Math.PI / 2);
+  g.drawImage(compassArrow, -10, -6);
+  g.restore();
+}
 function character() {
   const p = player,
     x = p.x - cam,
@@ -448,11 +492,12 @@ function character() {
   if (p.inv > 0.1 && p.hurtTime > 0) g.filter = "brightness(1.28)";
   drawActor("hero", frame, x, p.y - bob, 60, f);
   g.filter = "none";
-  if (!near || near.type === "scholar")
+  const targetHere = besideQuestTarget();
+  if (!near || (near.type === "scholar" && targetHere))
     label("요룡이", x, p.y + 5, "#fff4db", "#2c303b", 8);
   if (near) {
     let action = near.name;
-    if (near.type === "scholar") action = "대화";
+    if (near.type === "scholar") action = targetHere ? near.name + " · 대화" : "대화";
     else if (near.room) action += " 입장";
     else if (near.name === "매점") action = "회복";
     else if (near.type === "stair") {
@@ -460,8 +505,13 @@ function character() {
       else if (scene.type === "roof") action = "5층으로";
       else if (scene.type === "gate") action = "본관 1층으로";
       else if (scene.type === "arena") action = "복도로";
+      else if (targetHere) action = near.name + " · " + floorLabel(trackedQuest.floor) + " 선택";
     }
-    label("↑ " + action, x, p.y - 79, "#ffdda0", "#282e3a", 9);
+    const secondary = activeLeg && !targetHere;
+    const prompt = "↑ " + action;
+    fieldFont(9);
+    const margin = Math.ceil(ink.measureText(prompt).width / inkScaleX / 2) + 8;
+    label(prompt, clamp(x, margin, W - margin), p.y + (secondary ? 5 : -79), secondary ? "#e0e3ea" : "#ffdda0", "#282e3a", 9);
   }
 }
 function monsters() {
@@ -671,8 +721,10 @@ function render() {
   else if (!depth) battleBack();
   drawCombatGround();
   monsters();
+  chooseQuestLeg();
   character();
   particles();
+  drawQuestArrow(player.x - cam);
   g.restore();
   ink.restore();
   if (!$("mapview").hidden) miniMap();
@@ -691,6 +743,7 @@ function tick(ms) {
     acc -= 1 / 60;
   }
   render();
+  advanceQuestNotice(elapsed);
   if (ms - hudTime > 95) {
     statusBars();
     hudTime = ms;

@@ -1,0 +1,129 @@
+"use strict";
+
+const entranceQuest = {
+  title: "고요한 교문", chapter: "프롤로그", floor: 1,
+  story: "종이 울렸는데 운동장은 조용하다. 중앙 현관 너머에서 희미한 빛이 새어 나온다.",
+  place: "정문 · 중앙 현관", reward: "본관 탐험", art: "hero", kind: "entrance",
+};
+const trialTitles = ["떨어지는 사과", "빛의 약속", "저울 위의 비밀", "빈칸이 있는 표", "완두콩의 편지", "섬새의 부리", "갈라진 대륙", "지구의 심장"];
+const bossTitles = ["어긋난 궤도", "끓어오르는 실험실", "나선숲의 울림", "쏟아지는 별의 파편", "옥상의 마지막 균열"];
+const trialQuests = scholars.map((scholar, id) => {
+  const subject = subjects[Math.floor(id / 2)];
+  return { kind: "trial", id, title: trialTitles[id], chapter: subject.name + " 편", floor: subject.floor,
+    place: subject.floor + "층 복도 · " + scholar[0], art: "scholar" + id, reward: scholar[1], story: "“" + scholar[3] + "”" };
+});
+const bossQuests = subjects.map((subject, id) => ({
+  kind: "boss", id, title: bossTitles[id], chapter: id === 4 ? "종장" : subject.name + " 편",
+  floor: id === 4 ? 6 : 1, place: id === 4 ? "옥상 · 기억의 균열" : "1층 " + subject.lab + " · " + subject.room,
+  reward: subject.seal || "부광의 아침", story: subject.intro, art: "foe" + id,
+}));
+const epilogue = {
+  kind: "ending", title: "부광의 아침", chapter: "에필로그", story: "다시 종이 울리고 교실에 햇살이 든다.",
+  place: "부광고등학교 전역", reward: "자유 탐험", art: "hero",
+};
+
+function currentQuest() {
+  if (progress.won) return epilogue;
+  if (!progress.intro && scene.type === "gate") return entranceQuest;
+  if (scene.type === "arena" || scene.type === "roof") return bossQuests[scene.subject];
+  for (let i = 0; i < 4; i++) {
+    for (const id of [2 * i, 2 * i + 1]) {
+      if (!progress.learned.includes(id)) return trialQuests[id];
+    }
+    if (!progress.cleared.includes(i)) return bossQuests[i];
+  }
+  return bossQuests[4];
+}
+
+let trackedQuest, routeLegs = [], activeLeg;
+const freeExplore = "학자들을 다시 만나거나 교실을 둘러보세요.";
+const floorLabel = f => f === 6 ? "옥상" : f + "층";
+
+// Only the immediate, usable doorway belongs on the compass. Rebuild the legs
+// on travel or progression; the player and a moving boss can change x every frame.
+function buildQuestRoute(q) {
+  if (q === epilogue) return [];
+  const points = objects();
+  const passage = (point, cue, onward = 0) => ({point, cue, onward});
+  const stairs = points.filter(p => p.type === "stair");
+  if (scene.type === "gate")
+    return [passage(points.find(p => p.type === "entrance"), "중앙 현관 앞에서 ↑를 눌러 본관에 들어가세요.")];
+  if (scene.type === "classroom")
+    return stairs.map(p => passage(p, p.name + "에서 ↑를 눌러 " + scene.floor + "층 복도로 나가세요."));
+  if (scene.type === "arena" || scene.type === "roof") {
+    const boss = foes.find(e => e.boss);
+    return boss ? [passage(boss, subjects[boss.kind].boss + " 격파 · A 기본 공격 / QWER 스킬")] : [];
+  }
+  const destination = q.kind === "trial"
+    ? scholarPoint(q.id)
+    : q.floor === 1 ? hallBays[1].find(p => p.name === subjects[q.id].lab) : null;
+  if (scene.floor !== q.floor) {
+    return stairs.map(p => passage(p, p.name + "에서 ↑를 누르고 " + floorLabel(q.floor) + "을 선택하세요.",
+      destination ? Math.abs(p.x - destination.x) : 0));
+  }
+  if (q.kind === "trial")
+    return [passage(destination, destination.name + " 곁에서 ↑를 눌러 시련에 도전하세요.")];
+  if (destination)
+    return [passage(destination, destination.name + "에서 ↑를 누르고 " + subjects[q.id].room + "을 선택하세요.")];
+  return [];
+}
+
+function chooseQuestLeg() {
+  let best, shortest = Infinity;
+  for (const leg of routeLegs) {
+    const walk = Math.abs(player.x - leg.point.x);
+    const distance = walk + leg.onward;
+    if (distance < shortest || (distance === shortest && walk < Math.abs(player.x - best.point.x))) {
+      best = leg;
+      shortest = distance;
+    }
+  }
+  if (activeLeg !== best) {
+    activeLeg = best;
+    $("qaction").textContent = best?.cue || freeExplore;
+  }
+  return best;
+}
+function syncQuest() {
+  trackedQuest = currentQuest();
+  routeLegs = buildQuestRoute(trackedQuest);
+  $("qchapter").textContent = trackedQuest === epilogue ? "탐험 완료" : "메인 퀘스트 · " + trackedQuest.chapter;
+  $("qtitle").textContent = trackedQuest.title;
+  $("quest").setAttribute("aria-label", "모험 일지 열기 (J) · " + trackedQuest.title);
+  if (!chooseQuestLeg()) $("qaction").textContent = freeExplore;
+}
+
+const questNotices = [];
+let shownNotice = null;
+function announceQuest(completed = null) {
+  if (completed && !shownNotice?.completed) {
+    shownNotice = null;
+    if (questNotices.length && !questNotices[0].completed) questNotices.shift();
+    $("quest-notice").hidden = true;
+  }
+  questNotices.push({ completed, next: currentQuest(), remaining: completed ? 6 : 5 });
+}
+function resetQuestNotices() {
+  questNotices.length = 0;
+  shownNotice = null;
+  $("quest-notice").hidden = true;
+}
+function advanceQuestNotice(dt) {
+  const card = $("quest-notice");
+  if (modal || sceneTransition || document.hidden) { card.hidden = true; return; }
+  if (!shownNotice && questNotices.length) {
+    shownNotice = questNotices.shift();
+    const {completed, next} = shownNotice;
+    $("qn-status").textContent = completed ? "퀘스트 완료" : "새 퀘스트";
+    $("qn-finished").textContent = completed?.title || "";
+    $("qn-caption").textContent = completed ? (next === epilogue ? "모험 완료 · 자유 탐험" : "다음 퀘스트") : next.chapter;
+    $("qn-title").textContent = next.title;
+    $("qn-detail").textContent = next.story;
+    $("qn-place").textContent = next.place;
+    $("qn-portrait").src = "assets/" + next.art + ".png";
+  }
+  if (!shownNotice) return;
+  card.hidden = false;
+  shownNotice.remaining -= dt;
+  if (shownNotice.remaining <= 0) { card.hidden = true; shownNotice = null; }
+}

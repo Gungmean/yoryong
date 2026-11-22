@@ -264,7 +264,7 @@ function load() {
         ? d.progress.slots[k]
         : null,
     );
-    progress.intro = !!d.progress.intro;
+    progress.intro = !!d.progress.intro || progress.learned.length > 0;
     progress.won = d.progress.won && progress.cleared.length === 4;
     const s = d.scene || {};
     if (
@@ -287,6 +287,7 @@ function load() {
       scene = { type: "arena", floor: 1, subject: s.subject };
     if (s.type === "roof" && progress.cleared.length === 4)
       scene = { type: "roof", floor: 6, subject: 4 };
+    if (scene.type !== "gate") progress.intro = true;
     player.x = Number.isFinite(d.x) ? d.x : GATE_START;
     hp = clamp(Number(d.hp) || 100, 1, 100);
     mp = clamp(Number(d.mp) || 0, 0, 60);
@@ -294,52 +295,11 @@ function load() {
     musicEnabled = d.musicEnabled !== false;
     sceneryPaused = d.sceneryPaused === true;
     resumeFoe = d.encounter;
+    return true;
   } catch {}
 }
-function questInfo() {
-  if (progress.won)
-    return [
-      "학교의 기억을 되찾다",
-      "네 인장과 함께 캠퍼스를 자유롭게 탐험하세요.",
-    ];
-  if (scene.type === "gate")
-    return ["학교 안으로", "오른쪽 중앙 현관으로 이동하세요."];
-  if (scene.type === "arena" || scene.type === "roof")
-    return [
-      subjects[scene.subject].boss + " 격파",
-      subjects[scene.subject].hint,
-    ];
-  if (progress.cleared.length === 4)
-    return ["옥상에 열린 균열", "가까운 계단에서 옥상으로 올라가세요."];
-  const local = scene.floor - 2;
-  if (local >= 0 && !hasKey(local)) {
-    const id = progress.learned.includes(local * 2) ? local * 2 + 1 : local * 2;
-    return [
-      scholars[id][0] + "의 시련",
-      scene.floor +
-        "층 중앙 계단 " +
-        (id % 2 ? "오른쪽" : "왼쪽") +
-        "에서 학자를 만나세요.",
-    ];
-  }
-  const next = subjects.findIndex(
-    (s, i) => i < 4 && hasKey(i) && !progress.cleared.includes(i),
-  );
-  if (next >= 0)
-    return [
-      subjects[next].boss + " 격파",
-      "1층 " + subjects[next].lab + "에서 " + subjects[next].room + "으로.",
-    ];
-  const needed = subjects.findIndex((s, i) => i < 4 && !hasKey(i));
-  return [
-    subjects[needed].name + "의 열쇠를 찾아서",
-    "가까운 계단에서 " + subjects[needed].floor + "층으로 올라가세요.",
-  ];
-}
 function refresh() {
-  const q = questInfo();
-  $("qtitle").textContent = q[0];
-  $("quest").ariaLabel = "모험 일지 · " + q[0];
+  syncQuest();
   $("maptitle").textContent = scene.type === "gate" ? "부광고 정문" : floorName();
   $("minimap").ariaLabel = floorName() + " · 캠퍼스 지도 열기";
   $("level").textContent =
@@ -488,15 +448,18 @@ function showMap() {
   $("mapdetail").getContext("2d").drawImage($("mapview"), 0, 0);
 }
 function showQuest() {
-  let q = questInfo();
+  const q = trackedQuest;
+  const cue = chooseQuestLeg()?.cue || freeExplore;
+  const reward = q.reward + (q.kind === "trial" && progress.learned.includes(q.id ^ 1) ? " · " + subjects[Math.floor(q.id / 2)].key : "");
   show(
     "quest",
     "모험 일지",
-    '<div class="journal-note"><strong>' +
-      q[0] +
-      "</strong><p>" +
-      q[1] +
-      '</p></div><h3 class="collection-heading">과학의 인장 <small>' + progress.cleared.length + ' / 4</small></h3>' +
+    `<section class="quest-brief"><img src="assets/${q.art}.png" alt="">
+      <div><small>${q === epilogue ? "탐험 완료" : "메인 퀘스트"} · ${q.chapter}</small><h3>${q.title}</h3><p>${q.story}</p></div>
+      <dl><dt>목적지</dt><dd>${q.place}</dd><dt>지금 할 일</dt><dd>${cue}</dd>
+      ${q.kind === "boss" ? "<dt>전투 단서</dt><dd>" + subjects[q.id].hint + "</dd>" : ""}
+      <dt>${q === epilogue ? "이후" : "보상"}</dt><dd>${reward}</dd></dl></section>
+      <h3 class="collection-heading">과학의 인장 <small>${progress.cleared.length} / 4</small></h3>` +
       subjects
         .slice(0, 4)
         .map(
@@ -573,7 +536,7 @@ function menu() {
     <div class="menu-links">
       <button class="rowbtn" id="tomap"><i data-icon="map"></i>캠퍼스 지도<kbd>M</kbd></button>
       <button class="rowbtn" id="toequip"><i data-icon="slots"></i>스킬 배치<kbd>K</kbd></button>
-      <button class="rowbtn" id="toquest"><i data-icon="quest"></i>모험 일지 · 인장</button>
+      <button class="rowbtn" id="toquest"><i data-icon="quest"></i>모험 일지 · 인장 <kbd>J</kbd></button>
       <button class="rowbtn" id="help"><i data-icon="globe"></i>조작 안내</button>
     </div>
     <section aria-labelledby="settings-title">
@@ -626,12 +589,14 @@ function confirmReset() {
   $("yes").onclick = () => {
     runGeneration++;
     progress = newProgress();
+    resetQuestNotices();
     hp = 100;
     mp = 60;
     player.face = 1;
     shake = 0;
     closePanel();
     go("gate", 0, GATE_START);
+    announceQuest();
     $("world").focus({ preventScroll: true });
     notify(saveMessage === "자동 저장" ? "새 모험을 시작했습니다." : "이 창에서 새 모험을 시작했습니다. 브라우저에 저장할 수 없습니다.");
   };
@@ -642,7 +607,7 @@ function showHelp() {
     ["↓ + Alt", "발판 내려오기"], ["Shift", "회피 대시"],
     ["A", "기본 공격"], ["Q W E R", "장착한 스킬 사용"], ["K", "스킬 배치"],
     ["↑", "대화 · 입장 · 계단"], ["↓", "계단에서 한 층 내려가기"],
-    ["1–6", "답 또는 층 선택"], ["M", "캠퍼스 지도"], ["Esc", "메뉴 · 닫기"]
+    ["1–6", "답 또는 층 선택"], ["M", "캠퍼스 지도"], ["J", "모험 일지"], ["Esc", "메뉴 · 닫기"]
   ].map(([key, action]) => `<div class="help-row"><kbd>${key}</kbd><span>${action}</span></div>`).join(""));
 }
 function showStairs(stair) {
@@ -663,6 +628,7 @@ function showStairs(stair) {
               : "") +
             "><b>" +
             (f === 6 ? "옥상" : f + "층") +
+            (trackedQuest.floor === f && f !== scene.floor ? ' <em class="quest-choice">퀘스트 목적지</em>' : "") +
             "</b><span>" +
             (f === 6
               ? progress.cleared.length < 4
@@ -751,6 +717,7 @@ function quiz(id) {
           const n = Math.floor(id / 2);
           save();
           refresh();
+          announceQuest(trialQuests[id]);
           tone(820, 0.25);
           dialogue(
             s[0],
@@ -785,6 +752,7 @@ function labChoice(name) {
             (!hasKey(i) || progress.cleared.includes(i) ? "disabled" : "") +
             "><b>" +
             subjects[i].room +
+            (trackedQuest === bossQuests[i] ? ' <em class="quest-choice">퀘스트 목적지</em>' : "") +
             "</b><span>" +
             (progress.cleared.includes(i)
               ? "인장 획득"
@@ -803,6 +771,9 @@ function labChoice(name) {
       }),
   );
 }
+function scholarPoint(id) {
+  return { x: id % 2 ? 1510 : 706, name: scholars[id][0], type: "scholar", id };
+}
 function objects() {
   if (scene.type === "classroom") return [...sideStairs.classroom, classroomBoard];
   if (scene.type === "gate")
@@ -815,12 +786,7 @@ function objects() {
     if (scene.floor >= 2)
       for (let j = 0; j < 2; j++) {
         let id = (scene.floor - 2) * 2 + j;
-        a.push({
-          x: j ? 1510 : 706,
-          name: scholars[id][0],
-          type: "scholar",
-          id,
-        });
+        a.push(scholarPoint(id));
       }
     return a;
   }
@@ -853,10 +819,11 @@ function interact() {
   }
   tone(470);
   if (scene.type === "gate") {
+    const firstEntry = !progress.intro;
+    progress.intro = true;
     go("floor", 1, o.type === "stair" ? stairX("floor", o.side) : 580);
-    if (!progress.intro) {
-      progress.intro = true;
-      save();
+    if (firstEntry) {
+      announceQuest(entranceQuest);
       dialogue(
         "요룡이",
         "hero",
@@ -1037,6 +1004,7 @@ function winBoss(i) {
     syncMusic();
     save();
     refresh();
+    announceQuest(bossQuests[i]);
     dialogue(
       "요룡이",
       "hero",
@@ -1061,6 +1029,7 @@ function winBoss(i) {
   if (!progress.cleared.includes(i)) progress.cleared.push(i);
   const room = subjects[i].lab;
   go("floor", 1, room === "물리지학실" ? 1790 : 2090);
+  announceQuest(bossQuests[i]);
   dialogue(
     "요룡이",
     "hero",
@@ -1508,6 +1477,7 @@ function press(code, repeat = false) {
   if (code === "Escape") menu();
   if (code === "KeyK") showEquip();
   if (code === "KeyM") showMap();
+  if (code === "KeyJ") showQuest();
   if (code === "AltLeft" || code === "AltRight" || code === "Space")
     player.buffer = 0.11;
   if (code === "ShiftLeft" || code === "ShiftRight") {
@@ -1543,12 +1513,18 @@ const gameKeys = new Set([
   "KeyE",
   "KeyR",
   "KeyM",
+  "KeyJ",
   "KeyK",
   "Escape",
   "Space",
   "Enter",
 ]);
 window.addEventListener("keydown", (e) => {
+  if (modal === "quest" && e.code === "KeyJ") {
+    e.preventDefault();
+    if (!e.repeat) closePanel();
+    return;
+  }
   if (modal && e.key === "Tab") {
     const buttons = $("panel").querySelectorAll("button:not(:disabled)");
     const first = buttons[0], last = buttons[buttons.length - 1];
@@ -1677,8 +1653,9 @@ function showSeal(i) {
   );
   $("backjournal").onclick = showQuest;
 }
-load();
+const continuingRun = load();
 setScene();
+if (!continuingRun) announceQuest();
 if (resumeFoe) {
   const boss = foes.find((e) => e.boss && e.kind === resumeFoe.kind);
   if (boss && Number.isFinite(resumeFoe.hp) && Number.isFinite(resumeFoe.x)) {

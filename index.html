@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
-    <link rel="stylesheet" href="style.css?v=reset1">
+    <link rel="stylesheet" href="style.css?v=quests1">
   </head>
   <body>
     <main id="shell">
@@ -18,6 +18,13 @@
         <div id="scene-shade" aria-hidden="true"></div>
         <div id="scene-arrival" role="status" aria-live="polite" aria-atomic="true">
           <div class="arrival-sign"><strong id="arrival-place"></strong><span id="arrival-detail"></span></div>
+        </div>
+        <div id="quest-notice" role="status" aria-live="polite" aria-atomic="true" hidden>
+          <div class="quest-ribbon"><i data-icon="quest"></i><strong id="qn-status"></strong><span id="qn-finished"></span></div>
+          <div class="quest-preview"><img id="qn-portrait" alt=""><div>
+            <small id="qn-caption"></small><strong id="qn-title"></strong><p id="qn-detail"></p>
+          </div></div>
+          <div class="notice-destination"><span>목적지</span><b id="qn-place"></b></div>
         </div>
         <div class="hud-top">
           <div class="map-window">
@@ -31,7 +38,8 @@
           </div>
           <div id="bossbar" hidden><i data-icon="rift"></i><span><b id="bossname"></b><span class="boss-track"><i id="bossfill"></i></span></span></div>
           <nav class="field-tools" aria-label="모험 정보">
-            <button id="quest"><i data-icon="quest"></i><span id="qtitle"></span></button>
+            <button id="quest" aria-haspopup="dialog" aria-keyshortcuts="J" aria-describedby="qaction"><span class="quest-heading"><i data-icon="quest"></i><small id="qchapter"></small><kbd>J</kbd></span>
+              <strong id="qtitle"></strong><span id="qaction"></span></button>
             <button id="menu" aria-label="모험 메뉴" data-tip="모험 메뉴 (Esc)"><i data-icon="globe"></i><span>메뉴</span></button>
           </nav>
         </div>
@@ -67,13 +75,14 @@
     <script src="icons.js"></script>
     <script src="actor-sheets.js"></script>
     <script src="assets/combat/pixelfx.js"></script>
-    <script src="game.js?v=campus2"></script>
+    <script src="quests.js?v=quests1"></script>
+    <script src="game.js?v=quests1"></script>
     <script src="assets/world/atlas.js"></script>
     <script src="assets/world/fixtures.js"></script>
     <script src="scenery.js?v=campus2"></script>
     <script src="vendor/three-r187.min.js"></script>
     <script src="map3d.js?v=campus2"></script>
     <script src="combat-fx.js?v=pixelfx1"></script>
-    <script src="render.js?v=campus2"></script>
+    <script src="render.js?v=quests1"></script>
   </body>
 </html>

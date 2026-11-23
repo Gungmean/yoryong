@@ -654,46 +654,79 @@ kbd {
 #scholar-ultimate:disabled { opacity: .65; }
 #scholar-cut-in {
   position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden;
-  --cut-in-angle: -9deg; --cut-in-height: clamp(92px,18vh,170px);
+  --cut-in-tilt: clamp(10px,7vw,140px);
+  --cut-in-height: clamp(106px,20vh,180px);
   --cut-in-color: #87bcff;
+  --cut-in-engraving: 0;
+}
+.cut-in-shade {
+  position: absolute; inset: 0; background: #1019232b; animation: cut-in-fade .94s both;
 }
 .cut-in-sweep {
   position: absolute; inset: 0; animation: cut-in-sweep .94s both;
 }
 .cut-in-band {
-  position: absolute; top: 45%; left: -10%; width: 120%; height: var(--cut-in-height);
-  transform: translateY(-50%) rotate(var(--cut-in-angle));
-  background: linear-gradient(90deg,#15233cf2 24%,#233d5cf2 66%,#131e32f2);
-  border-block: 3px solid var(--cut-in-color);
-  box-shadow: inset 0 2px #ffffff52, inset 0 -2px #111624;
+  position: absolute; inset: calc(45% - var(--cut-in-height) / 2 - var(--cut-in-tilt) / 2) 0 auto;
+  height: calc(var(--cut-in-height) + var(--cut-in-tilt));
+  clip-path: polygon(0 var(--cut-in-tilt),100% 0,100% calc(100% - var(--cut-in-tilt)),0 100%);
+  background: linear-gradient(90deg,var(--cut-in-color),#ffe6b3 68%,var(--cut-in-color));
+}
+.cut-in-band::before {
+  content: ""; position: absolute; inset: 3px 0 4px;
+  clip-path: polygon(0 var(--cut-in-tilt),100% 0,100% calc(100% - var(--cut-in-tilt)),0 100%);
+  background:
+    linear-gradient(106deg,transparent 58%,color-mix(in srgb,var(--cut-in-color) 16%,#18283b) 58% 84%,transparent 84%),
+    #17263a;
+}
+.cut-in-band::after {
+  content: ""; position: absolute; inset: 8px 0 9px;
+  clip-path: polygon(0 var(--cut-in-tilt),100% 0,100% 1px,0 calc(var(--cut-in-tilt) + 1px));
+  background: color-mix(in srgb,var(--cut-in-color) 42%,#17263a);
+}
+.cut-in-engraving {
+  position: absolute; inset: auto 0 7% auto; width: min(56vw,760px); aspect-ratio: 196 / 92;
+  overflow: hidden; opacity: .56;
+}
+.cut-in-engraving img {
+  width: 100%; height: auto; display: block; transform: translateY(calc(-25% * var(--cut-in-engraving)));
 }
 .cut-in-credit {
-  position: absolute; inset-inline: 14% 13%; top: 45%;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  transform: translateY(-50%) rotate(var(--cut-in-angle));
+  position: absolute; inset: 45% 0 auto; width: min(78%,1160px); margin-inline: auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  transform: translateY(-50%);
 }
-.cut-in-credit > div { color: #fff4d8; text-shadow: 2px 3px #101823; }
+.cut-in-credit > div { min-width: 0; color: #fff6e3; transform: translateY(calc(var(--cut-in-tilt) * .22)); }
 .cut-in-credit small, .cut-in-credit strong { display: block; word-break: keep-all; }
-.cut-in-credit small { font-size: clamp(14px,2vw,23px); color: #ffe0a4; }
-.cut-in-credit strong { font-size: clamp(24px,5vw,68px); line-height: 1.12; }
+.cut-in-credit small {
+  font-size: clamp(13px,1.7vw,20px); color: var(--cut-in-color); margin-bottom: 5px;
+  letter-spacing: .02em;
+}
+.cut-in-credit strong {
+  font-size: clamp(23px,min(5vw,9vh),64px); line-height: 1.15; text-wrap: balance;
+  text-shadow: 2px 3px #0b1728;
+}
 #cut-in-portrait {
-  width: min(28vw,calc(var(--cut-in-height) * 1.55)); height: calc(var(--cut-in-height) * 1.55);
-  flex: none; object-fit: contain; image-rendering: pixelated; transform: rotate(9deg);
-  filter: drop-shadow(3px 3px #131c2d);
+  width: min(33vw,calc(var(--cut-in-height) * 1.64)); height: calc(var(--cut-in-height) * 1.64);
+  flex: none; object-fit: contain; image-rendering: pixelated;
+  transform: translateY(calc(var(--cut-in-tilt) * -.28));
+  filter: drop-shadow(2px 1px 0 #fcdda58a) drop-shadow(-3px 3px 1px #101726);
 }
 #scholar-cut-in[data-quiet] .cut-in-sweep { animation-name: cut-in-fade; }
+#scholar-cut-in[data-quiet] .cut-in-shade { display: none; }
 @keyframes cut-in-sweep {
-  0% { transform: translateX(-105%); }
-  18%, 72% { transform: translateX(0); opacity: 1; }
-  100% { transform: translateX(105%); opacity: .25; }
+  0% { clip-path: inset(0 100% 0 0); transform: translateX(-34px); animation-timing-function: cubic-bezier(.18,.72,.26,1); }
+  19%, 75% { clip-path: inset(0); transform: translateX(0); }
+  100% { clip-path: inset(0 0 0 100%); transform: translateX(30px); }
 }
 @keyframes cut-in-fade {
   0%, 100% { opacity: 0; }
   12%, 80% { opacity: 1; }
 }
 @media (max-width: 580px) {
-  .cut-in-credit { inset-inline: 7%; }
-  #cut-in-portrait { width: 34vw; }
+  #scholar-cut-in { --cut-in-height: clamp(106px,16vh,132px); }
+  .cut-in-credit { width: 88%; }
+  .cut-in-credit strong { font-size: clamp(25px,7vw,35px); }
+  .cut-in-engraving { width: 66vw; }
 }
 @media (pointer: coarse) {
   #scholar-ultimate kbd { display: none; }

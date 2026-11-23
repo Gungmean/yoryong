@@ -140,7 +140,9 @@ function showScholarCutIn(id) {
   $("cut-in-portrait").src = portraitPath("scholar" + id);
   $("cut-in-scholar").textContent = scholars[id][0];
   $("cut-in-skill").textContent = scholars[id][1];
-  cutIn.style.setProperty("--cut-in-color", subjects[id >> 1].color);
+  const subject = id >> 1;
+  cutIn.style.setProperty("--cut-in-color", subjects[subject].color);
+  cutIn.style.setProperty("--cut-in-engraving", subject);
   cutIn.toggleAttribute("data-quiet", quietCombat());
   cutInRemaining = .94;
   cutIn.hidden = false;

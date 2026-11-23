@@ -386,8 +386,8 @@ function show(kind, title, body, canClose = true) {
   $("overlay").hidden = false;
   const marks = { menu: "globe", map: "zelkova", equip: "slots", quest: "quest",
     lab: "flask", down: "rose", ending: "globe", seal: "globe",
-    dialogue: "quest", quiz: "atom", help: "map", reset: "globe" };
-  $("panel").innerHTML = `<div class="panel-head"><i data-icon="${marks[kind]}"></i>
+    quiz: "atom", help: "map", reset: "globe" };
+  $("panel").innerHTML = kind === "dialogue" ? body : `<div class="panel-head"><i data-icon="${marks[kind]}"></i>
     <div class="book-title"><h2 id="paneltitle">${title}</h2>
     ${kind === "menu" ? '<p>부광고등학교 <span>창의(創意)</span></p>' : ''}</div>
     ${canClose ? '<button class="close" aria-label="닫기" data-close><i data-icon="close"></i></button>' : ''}
@@ -416,18 +416,15 @@ function closePanel() {
   keys.clear();
 }
 function dialogue(name, asset, line, button, fn) {
-  show(
-    "dialogue",
-    name,
-    '<div class="conversation"><img class="portrait" src="' +
-      portraitPath(asset) +
-      '" alt=""><div><p>' +
-      line +
-      '</p><button class="confirm" id="continue">' +
-      button +
-      "</button></div></div>",
-    false,
-  );
+  const side = asset === "hero" ? "right" : "left";
+  show("dialogue", name, `<div class="dialogue-stage" data-side="${side}">
+    <div class="dialogue-speaker">
+      <img class="dialogue-portrait" src="assets/portraits/dialogue/${asset}.png" alt="">
+      <h2 id="paneltitle" class="dialogue-name">${name}</h2>
+    </div>
+    <div class="dialogue-copy" tabindex="0"><p>${line}</p></div>
+    <div class="dialogue-actions"><button class="confirm" id="continue">${button}</button></div>
+  </div>`, false);
   $("continue").onclick = () => {
     closePanel();
     fn?.();
@@ -1623,7 +1620,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (modal && e.key === "Tab") {
     const host = $(modal === "ward" ? "ward-question" : "panel");
-    const buttons = host.querySelectorAll("button:not(:disabled), input:not(:disabled), summary");
+    const buttons = host.querySelectorAll("button:not(:disabled), input:not(:disabled), summary, .dialogue-copy");
     const first = buttons[0], last = buttons[buttons.length - 1];
     if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
       e.preventDefault();

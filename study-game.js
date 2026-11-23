@@ -131,9 +131,12 @@ function showScholarCutIn(id) {
   $("cut-in-portrait").src = portraitPath("scholar" + id);
   $("cut-in-scholar").textContent = scholars[id][0];
   $("cut-in-skill").textContent = wardTechniques[id];
-  const subject = id >> 1;
-  cutIn.style.setProperty("--cut-in-color", subjects[subject].color);
-  cutIn.style.setProperty("--cut-in-engraving", subject);
+  const [, color, face] = techniqueInk[id];
+  cutIn.dataset.technique = id;
+  cutIn.style.setProperty("--cut-in-color", color);
+  cutIn.style.setProperty("--cut-in-face", face);
+  cutIn.style.setProperty("--cut-in-bed", cutInThemes[id].bed);
+  cutIn.style.setProperty("--cut-in-engraving", id);
   cutIn.toggleAttribute("data-quiet", quietCombat());
   cutInRemaining = .94;
   cutIn.hidden = false;

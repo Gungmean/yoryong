@@ -306,33 +306,58 @@ const lightningLanes = [
   [-.25,.36,67], [.26,.53,63], [.70,.41,71],
   [-.03,.32,100], [.49,.38,98],
 ];
-const streakKinks = [[0,0], [.16,3], [.22,-2], [.40,1], [.49,-4], [.71,0], [.80,-3], [1,0]];
+const cutInThemes = [
+  {bed:"#301c25", speed:1.34, length:.82, teeth:1.15, kinks:[0,4,-6,3,-8,1,0],
+    mote:["....+","...+#","..++#",".++##","###.."]}, // Newton's embers
+  {bed:"#172943", speed:.94, length:1.16, teeth:.58, kinks:[0,0,4,4,-2,-2,0],
+    mote:["..+..",".#+#.","++#++",".#+#.","..+.."]}, // Time marks
+  {bed:"#32261a", speed:.82, length:1.12, teeth:.52, kinks:[0,2,2,0,-2,-2,0],
+    mote:["..+..",".+++.",".###.","#####","#####"]}, // Scale weights
+  {bed:"#2c2045", speed:1.12, length:.88, teeth:1.30, kinks:[0,7,-6,7,-7,4,0],
+    mote:["..+..",".+##.","++###",".###.","..#.."]}, // Crystal facets
+  {bed:"#183323", speed:.87, length:1.10, teeth:.74, kinks:[0,7,8,2,-5,-5,0],
+    mote:["...##","..#+#",".#+##","#+##.","###.."]}, // Leaves
+  {bed:"#38221a", speed:1.22, length:.77, teeth:.92, kinks:[0,-7,-2,8,2,-6,0],
+    mote:["#+..+#","##++##",".#++#.",".+##+.",".#..#."]}, // Paired wings
+  {bed:"#352620", speed:.78, length:.94, teeth:1.28, kinks:[0,5,5,-7,-7,3,0],
+    mote:["..+++.",".####.","#####.","#####.","..###."]}, // Broken strata
+  {bed:"#382128", speed:1.06, length:1.18, teeth:.66, kinks:[0,7,9,3,-6,-9,0],
+    mote:["..++..",".+##+.","+#+##+","+##+#+",".+##+.","..++.."]}, // Core rings
+];
 
-function lightningRush(side, width, base, slant, px, age, color) {
+function cutInMote(pattern, x, y, color, face, size) {
+  for (const [row, marks] of pattern.entries()) {
+    for (let col = 0; col < marks.length; col++) {
+      if (marks[col] === ".") continue;
+      lightningInk.fillStyle = marks[col] === "+" ? face : color;
+      lightningInk.fillRect(Math.round(x + col * size), Math.round(y + row * size), size, size);
+    }
+  }
+}
+
+function lightningRush(side, width, base, slant, px, age, theme, [edge, color, face]) {
   const outward = side ? 1 : -1;
   const slope = slant / width;
   const release = clamp((age - .65) / .29, 0, 1);
   for (const [index, [launch, length, gap]] of lightningLanes.entries()) {
-    const start = width * (launch + (age - .5) * (.36 + index % 3 * .08) + side * .12);
-    const lengthPx = width * length * (.82 + .22 * release);
+    const start = width * (launch + (age - .5) * (.36 + index % 3 * .08) * theme.speed + side * .12);
+    const lengthPx = width * length * (.82 + .22 * release) * theme.length;
     const y = base + outward * gap / px;
-    const points = streakKinks.map(([fraction, kink]) => {
-      const x = start + lengthPx * fraction;
+    const points = theme.kinks.map((kink, step) => {
+      const x = start + lengthPx * step / (theme.kinks.length - 1);
       return [x, y - x * slope + kink / px];
     });
     lightningInk.globalAlpha = (.55 + index % 3 * .11) * (1 - release * .34);
-    paintLightning(points, "#172740", index < 3 ? 6 : 4);
+    paintLightning(points, edge, index < 3 ? 6 : 4);
     paintLightning(points, color, index < 3 ? 4 : 2);
     const core = start + lengthPx * (.2 + (age + index * .19) % .6);
-    paintLightning(points, "#fff4d0", index < 3 ? 2 : 1, x => x >= core && x < core + lengthPx * .34);
+    paintLightning(points, face, index < 3 ? 2 : 1, x => x >= core && x < core + lengthPx * .34);
 
     const end = start + lengthPx;
-    for (let spark = 0; spark < 3; spark++) {
-      const x = end + (9 + spark * 12) * (1 + release) / px;
-      const size = (8 - spark * 2 + release * 7) / px;
-      const py = y - x * slope + (spark === 1 ? 4 : -2) / px;
-      paintLightning([[x,py], [x + size,py - size * slope]],
-        spark % 2 ? color : "#fff4d0", spark ? 1 : 2);
+    for (let spark = 0; spark < 2; spark++) {
+      const x = end + (12 + spark * 25) * (1 + release) / px;
+      const py = y - x * slope - 2 - spark;
+      cutInMote(theme.mote, x, py, color, face, index < 3 && px > 2 && !spark ? 2 : 1);
     }
   }
   lightningInk.globalAlpha = 1;
@@ -354,7 +379,9 @@ function drawCutInLightning() {
 
   const quiet = quietCombat();
   const age = 1 - cutInRemaining / .94;
-  const color = cutIn.style.getPropertyValue("--cut-in-color");
+  const id = Number(cutIn.dataset.technique);
+  const theme = cutInThemes[id], palette = techniqueInk[id];
+  const [edge, color, face] = palette;
   const slant = tilt / px, pad = (cutInBolts.clientHeight - cutInBand.clientHeight) / (2 * px);
   const breadth = height - slant - pad * 2;
   for (const side of [0, 1]) {
@@ -362,16 +389,16 @@ function drawCutInLightning() {
     const crest = age * 1.35 - .16 - side * .12;
     const knots = lightningTeeth.map(([fraction, tooth], i) => {
       const bend = side ? lightningTeeth[lightningTeeth.length - 1 - i][1] : tooth;
-      const depth = quiet ? bend * .55 : bend;
+      const depth = bend * theme.teeth * (quiet ? .55 : 1);
       return [Math.round(fraction * (width - 1)),
         Math.round(pad + side * breadth + (1 - fraction) * slant - out * depth / px)];
     });
     if (!quiet) {
-      lightningRush(side, width, pad + side * breadth + slant, slant, px, age, color);
+      lightningRush(side, width, pad + side * breadth + slant, slant, px, age, theme, palette);
     }
-    paintLightning(knots, "#102134", quiet ? 5 : 8);
+    paintLightning(knots, edge, quiet ? 5 : 8);
     paintLightning(knots, color, quiet ? 3 : 5);
-    paintLightning(knots, "#fff4d0", quiet ? 1 : 2, x => quiet || Math.abs(x / width - crest) < .30);
+    paintLightning(knots, face, quiet ? 1 : 2, x => quiet || Math.abs(x / width - crest) < .30);
   }
 }
 
@@ -387,12 +414,12 @@ function drawCutInLettering() {
   const available = cutInType.clientWidth;
   if (!available) return;
   const color = $("scholar-cut-in").style.getPropertyValue("--cut-in-color");
+  const face = $("scholar-cut-in").style.getPropertyValue("--cut-in-face");
   const bandDepth = cutInBand.clientHeight - (parseFloat($("scholar-cut-in").style.getPropertyValue("--cut-in-tilt")) || 0);
-  const key = [title, scholar, available, bandDepth, color].join("|");
+  const key = [title, scholar, available, bandDepth, color, face].join("|");
   if (cutInLetteringKey === key) return;
   cutInLetteringKey = key;
 
-  const face = "#fff2d6";
   const wholeTitle = pixelLettering(title, face);
   const words = title.split(" ");
   const titleLines = wholeTitle.width * 2 + 5 > available && words.length > 1

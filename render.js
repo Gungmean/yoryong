@@ -813,6 +813,7 @@ function render() {
     if (x > -85 && x < W + 85) label(subjects[scene.subject].room, x, 91, "#e9e4ca", "#485953", 9);
   }
   if (defeated) drawBossClearBack(defeated);
+  drawWardTechniqueBack();
   drawCombatGround();
   monsters();
   chooseQuestLeg();

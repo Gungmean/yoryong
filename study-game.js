@@ -178,7 +178,7 @@ function advanceWardCast(boss, dt) {
   shots = shots.filter(shot => !shot.team);
   boss.time = 1;
   player.inv = Math.max(player.inv, 1.1);
-  combatEvent("wardImpact", boss.x, boss.y, 1.12, {id, height:boss.height, half:boss.half, dir});
+  combatEvent("wardImpact", boss.x, boss.y, 1.32, {id, height:boss.height, half:boss.half});
   playEffect("phase");
   if (skillSounds[id].onGround) playEffect(skillSounds[id].impact);
   hitFoe(boss, Math.ceil((boss.hp - studyFloor(boss)) * .22), id, dir);

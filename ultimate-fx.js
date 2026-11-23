@@ -132,6 +132,106 @@ function innerCore(x, y, p, alpha, scale) {
 const techniquePoses = [fallingApples, stoppedClock, goldenBalance, amethystLattice,
   risingSeed, goldenWings, plateCollision, innerCore];
 
+// The animated atlas goes behind the fighters. The signature silhouettes and
+// broken ward pieces render in front at the same impact beat.
+const techniqueBursts = [
+  [["meteor",0,0,1.35], ["gravity",0,-70,2.2]],
+  [["space",-84,-85,1.65,true], ["space",84,-85,1.65], ["orbitSeal",0,-3,2.25]],
+  [["restore",-113,-5,2.1], ["restore",113,-5,2.1], ["reactionSeal",0,-2,2.6]],
+  [["prism",-45,-62,1.5], ["prism",45,-62,1.5,true], ["reactionSeal",0,0,2.2]],
+  [["roots",0,0,2.8], ["thicket",44,0,1.43,true], ["thicket",-44,0,1.43]],
+  [["wings",-78,-95,1.5,true], ["wings",78,-95,1.5], ["livingSeal",0,-3,2.5]],
+  [["fault",-55,0,1.24], ["fault",55,0,1.24,true], ["quake",0,0,1.52]],
+  [["core",0,-4,1.82], ["quake",-130,-2,1.24,true], ["quake",130,-2,1.24]],
+];
+const techniqueSeals = ["orbitSeal", "reactionSeal", "livingSeal", "strataSeal"];
+
+function wardConvergence(x, foot, height, p, id) {
+  const [edge, color, tip] = techniqueInk[id];
+  const origin = foot - height * .49;
+  const radius = 208 - p * 102;
+  g.save();
+  g.globalAlpha *= Math.min(.88, p * 1.3);
+  spellClip(techniqueSeals[id >> 1], .29 + .39 * p, x, foot - 3, 1.65 + .42 * p, .85);
+  fxArc(x, foot - 3, radius * 1.1, 14 + p * 5, edge, 0, Math.PI * 2, 5);
+  fxArc(x, foot - 3, radius * 1.1, 14 + p * 5, color, 0, Math.PI * 2, 2);
+  for (let i = 0; i < 20; i++) {
+    const angle = i * 2.39996 + p * 1.4;
+    const dir = Math.cos(angle), rise = Math.sin(angle) * .7;
+    const distance = radius * (.76 + i % 5 * .085), length = 10 + i % 4 * 9;
+    const px = x + dir * distance, py = origin + rise * distance;
+    fxLine([[px + dir * length, py + rise * length], [px, py]], color, 2);
+    r(px - 1, py - 1, i % 4 === 0 ? 4 : 2, 3, tip);
+  }
+  g.restore();
+}
+
+function drawWardTechniqueBack() {
+  if (quietCombat()) return;
+  const charging = foes.find(e => e.wardCast);
+  const impact = effects.find(fx => fx.type === "wardImpact");
+  if (!charging && !impact) return;
+  const fx = charging?.wardCast ?? impact;
+  const stage = charging ? clamp(fx.elapsed / wardImpactTime, 0, 1) : 1 - fx.life / fx.max;
+  g.save();
+  g.globalAlpha *= charging ? .29 * Math.min(1, stage * 4) : .27 * (1 - stage);
+  r(-18, 0, W + 36, H, "#101a2f");
+  g.restore();
+  if (charging) {
+    wardConvergence(charging.x - cam, charging.y, charging.height, stage, fx.id);
+    return;
+  }
+  const x = fx.x - cam, floor = fx.y;
+  for (const [clip, dx, dy, size, flip] of techniqueBursts[fx.id]) {
+    spellClip(clip, stage * 1.17, x + dx, floor + dy, size, Math.min(.9, (1 - stage) * 1.3), flip);
+  }
+  spellClip("dust", stage, x - 105, floor, 1.7, .58, true);
+  spellClip("dust", stage, x + 105, floor, 1.7, .58);
+}
+
+function shatteredWard(x, y, fx, t, soft) {
+  const [edge, color, tip] = techniqueInk[fx.id];
+  const pieces = soft ? 8 : 21;
+  for (let i = 0; i < pieces; i++) {
+    const a = i * 2.39996;
+    const sx = Math.cos(a), sy = Math.sin(a);
+    const reach = t * (100 + i % 6 * 21) * (soft ? .45 : 1);
+    const px = x + sx * (fx.half + 19 + reach);
+    const py = Math.min(fx.y + 3, y + sy * (fx.height * .43 + reach * .65) + 116 * t * t);
+    const size = (7 + i % 5 * 2) * (1 - t * .65);
+    const tilt = a + (i % 2 ? -1 : 1) * t * 4;
+    const dx = Math.cos(tilt) * size, dy = Math.sin(tilt) * size;
+    const points = [[px-dy, py+dx], [px+dx, py+dy], [px+dy, py-dx], [px-dx*.53, py-dy*.53]];
+    path(points, edge);
+    fxLine(points.slice(0,3), i % 3 ? color : tip, i % 3 ? 2 : 3);
+    if (!soft && t < .25) fxLine([[px-sx*21,py-sy*12], [px,py]], tip, 2);
+  }
+}
+
+function wardShockwave(x, foot, height, t, color, tip, soft) {
+  const rings = soft ? 1 : 3;
+  for (let i = 0; i < rings; i++) {
+    const wave = (t - i * .105) / .64;
+    if (wave < 0 || wave > 1) continue;
+    const span = 29 + (1 - (1 - wave) ** 2.3) * (soft ? 118 : 337);
+    g.save();
+    g.globalAlpha *= 1 - wave;
+    fxArc(x, foot - 4, span, 5 + wave * 27, color, 0, Math.PI * 2, i ? 2 : 4);
+    if (!soft) fxArc(x, foot - 7, span * .86, 4 + wave * 21, tip, Math.PI, Math.PI * 2, 2);
+    g.restore();
+  }
+  if (soft || t > .21) return;
+  const quick = t / .21, center = foot - height * .51;
+  const breadth = 38 + quick * 231;
+  g.save();
+  g.globalAlpha *= (1 - quick) ** 2;
+  path([[x-breadth,center+16], [x-25,center-4], [x,center-38], [x+24,center-10],
+    [x+breadth,center-17], [x+29,center+4], [x+2,center+30], [x-24,center+12]], color);
+  path([[x-breadth*.72,center+11], [x-9,center-3], [x+3,center-22],
+    [x+13,center-4], [x+breadth*.72,center-12], [x+15,center+3], [x,center+17], [x-9,center+5]], tip);
+  g.restore();
+}
+
 function drawWardTechniques() {
   const soft = quietCombat();
   for (const boss of foes) {
@@ -152,21 +252,21 @@ function drawWardTechniques() {
     const x = fx.x - cam, y = fx.y - fx.height * .51;
     const t = 1 - fx.life / fx.max;
     const expand = 1 - (1 - t) ** 3;
-    const [edge, color, tip] = techniqueInk[fx.id];
+    const [, color, tip] = techniqueInk[fx.id];
     g.save();
     g.globalAlpha *= (1 - t) ** 1.2;
-    if (!soft && t < .48) techniquePoses[fx.id](x, y, 1, 1, Math.min(1.18, fx.height / 172));
-    const rx = fx.half + 25 + expand * (soft ? 35 : 99), ry = fx.height * .5 + expand * 43;
-    for (let i = 0; i < 12; i++) {
-      const angle = i * Math.PI / 6;
-      const sx = Math.cos(angle), sy = Math.sin(angle);
-      const px = x + sx * rx, py = y + sy * ry;
-      path([[px,py - 7], [px + sx * 16 + 3,py + sy * 16], [px + 3,py + 10],
-        [px - sx * 10,py - sy * 8]], edge);
-      fxLine([[px,py - 7], [px + sx * 16 + 3,py + sy * 16], [px + 3,py + 10]], i % 2 ? color : tip, 2);
+    if (!soft && t < .48) {
+      g.save();
+      g.globalAlpha *= 1 - t / .48;
+      techniquePoses[fx.id](x, y, 1, 1, Math.min(1.18, fx.height / 172) * (1 + expand * .16));
+      g.restore();
     }
-    fxArc(x, fx.y - 5, 30 + expand * (soft ? 90 : 240), 6 + expand * 29, color, 0, Math.PI * 2, 3);
-    if (!soft) splinters(x, y, t, 185, tip, 28);
+    shatteredWard(x, y, fx, t, soft);
+    wardShockwave(x, fx.y, fx.height, t, color, tip, soft);
+    if (!soft) {
+      splinters(x, y, t, 255, tip, 34);
+      splinters(x, y, t, 321, color, 19, .48);
+    }
     g.restore();
   }
 }

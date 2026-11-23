@@ -53,16 +53,33 @@ function bossPhase(e) {
 function bossWarningProgress(e) {
   return e.plan && e.warn > 0 ? 1 - e.warn / e.plan.move.lead : 0;
 }
-function planBossMove(e) {
+// A round uses each available move once. Between teaching the opening move
+// and the next phase, spacing determines which remaining threat fits.
+function chooseBossMove(e, phase) {
   const moves = bossMoves[e.kind];
-  const phase = bossPhase(e);
   const opening = e.kind === 4 ? 3 : 2;
-  if (e.phase !== phase) {
-    e.phase = phase;
-    e.step = phase === 2 ? opening : 0;
+  const count = phase === 2 ? moves.length : opening;
+  const phaseChanged = e.phase !== phase;
+  if (phaseChanged || !e.remainingMoves?.length)
+    e.remainingMoves = Array.from({ length: count }, (_, i) => i);
+  const distance = Math.abs(player.x - e.x);
+  const airborne = player.y < GROUND - 50;
+  function fit(id) {
+    const move = moves[id];
+    if (id === e.lastMove) return -1;
+    if (move.dash) return distance > 90 && distance < move.dash ? 4 : 0;
+    if (move.bolts) return (move.bolts[0].height > 65) === airborne ? 3 : 1;
+    return distance < 115 ? 4 : 2;
   }
-  const move = moves[e.step];
-  e.step = (e.step + 1) % (phase === 2 ? moves.length : opening);
+  const index = phaseChanged ? (phase === 2 ? opening : 0)
+    : e.remainingMoves.reduce((best, id) => fit(id) > fit(best) ? id : best);
+  e.remainingMoves.splice(e.remainingMoves.indexOf(index), 1);
+  e.phase = phase;
+  e.lastMove = index;
+  return moves[index];
+}
+function planBossMove(e) {
+  const move = chooseBossMove(e, bossPhase(e));
   const dir = Math.sign(player.x - e.x) || e.dir;
   const strikes = (move.zones || []).map(zone => ({
     ...zone, x: player.x + zone.offset,

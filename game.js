@@ -29,8 +29,9 @@ let player = {
   attackCD: 0,
   buffer: 0,
 };
+const hallSpawnX = [440, 1840];
 function newProgress() {
-  return { learned: [], cleared: [], slots: [null, null, null, null], won: false, intro: false, practice: 0, courseStates: {} };
+  return { learned: [], cleared: [], clearedHallSpawns: [], slots: [null, null, null, null], won: false, intro: false, practice: 0, courseStates: {} };
 }
 const coarseInput = matchMedia("(pointer: coarse)");
 let panelBack = null, attackPointer = null;
@@ -221,28 +222,16 @@ function parseSave(raw) {
 function save() {
   try {
     // A background tab can autosave or close before its storage event arrives.
-    if (parseSave(localStorage.getItem(SAVE))?.generation > runGeneration) return;
+    const previous = localStorage.getItem(SAVE);
+    if (parseSave(previous)?.generation > runGeneration) return;
     const boss = foes.find((e) => e.boss);
     const encounter =
       boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max } : null;
-    localStorage.setItem(
-      SAVE,
-      JSON.stringify({
-        generation: runGeneration,
-        progress,
-        scene,
-        x: player.x,
-        hp,
-        mp,
-        sound,
-        musicEnabled,
-        musicVolume,
-        effectsVolume,
-        reducedCombat,
-        sceneryPaused,
-        encounter,
-      }),
-    );
+    const next = JSON.stringify({
+      generation: runGeneration, progress, scene, x: player.x, hp, mp,
+      sound, musicEnabled, musicVolume, effectsVolume, reducedCombat, sceneryPaused, encounter,
+    });
+    if (next !== previous) localStorage.setItem(SAVE, next);
     saveMessage = "자동 저장";
   } catch {
     if (saveMessage !== "저장 사용 불가") notify("이 브라우저에서는 진행 상황을 저장할 수 없습니다.");
@@ -268,6 +257,7 @@ function load() {
       ),
     ];
     progress.learned = ids(d.progress.learned, 8);
+    progress.clearedHallSpawns = ids(d.progress.clearedHallSpawns, 4 * hallSpawnX.length);
     progress.cleared = ids(d.progress.cleared, 4).filter(hasKey);
     progress.slots = slotKeys.map((_, k) =>
       progress.learned.includes(d.progress.slots[k])
@@ -520,11 +510,11 @@ function showQuest() {
 }
 const skillDetails = [
   "사과가 떨어지는 지점에 범위 피해",
-  "전방으로 전기 투사체 발사",
+  "바라보는 쪽으로 빛의 고리 발사",
   "낙하 범위 공격 · 내 체력 10 회복",
-  "전방으로 산성 투사체 3발 발사",
+  "원소 결정 3개가 부채꼴로 퍼짐",
   "덩굴 적중 시 2.2초간 이동 둔화",
-  "전방으로 물결을 그리며 날아가는 포자",
+  "가까운 적을 따라가는 나비 떼",
   "바위 세 번 낙하 · 타격당 피해 12~14",
   "요룡이 좌우로 넓은 지진파",
 ];
@@ -546,7 +536,7 @@ function showEquip(activeSlot = 0) {
   show("equip", "스킬 배치",
     `<div class="sockets" role="group" aria-label="배치할 슬롯">${sockets}</div>
     <h3 class="choice-title"><kbd>${slotKeys[activeSlot]}</kbd> 슬롯에 배치할 스킬</h3>
-    ${options || '<p class="empty-note">아직 배운 스킬이 없어요. 위층의 학자를 만나 시련에 도전하세요.</p>'}
+    ${options || '<p class="empty-note">2층 물리 교실 A에서 뉴턴을 만나면 첫 스킬을 배울 수 있어요.</p>'}
     ${equipped != null ? '<button class="rowbtn" data-unequip>이 슬롯 비우기</button>' : ''}`);
   $("panel").querySelector(`[data-equip="${activeSlot}"]`).focus({ preventScroll: true });
   $("panel").querySelectorAll("[data-equip]").forEach(button => {
@@ -618,8 +608,8 @@ function menu() {
     slider.oninput = () => {
       slider.nextElementSibling.textContent = slider.value + "%";
       update(+slider.value / 100);
-      save();
     };
+    slider.onchange = save;
   };
   volume("music-volume", value => {
     musicVolume = value;
@@ -677,7 +667,6 @@ function confirmReset() {
     shake = 0;
     closePanel();
     go("gate", 0, GATE_START);
-    announceQuest();
     $("world").focus({ preventScroll: true });
     notify(saveMessage === "자동 저장" ? "새 모험을 시작했습니다." : "이 창에서 새 모험을 시작했습니다. 브라우저에 저장할 수 없습니다.");
   };
@@ -703,20 +692,22 @@ function showHelp() {
 }
 function quiz(id) {
   const s = scholars[id];
+  const subject = subjects[Math.floor(id / 2)];
   if (progress.learned.includes(id)) {
+    const other = id ^ 1;
+    const nextRoom = classroomDoor(subject.floor, scholarCourses[other].room).name;
     dialogue(
       s[0],
       "scholar" + id,
       s[7] +
-        " " +
-        (hasKey(Math.floor(id / 2))
-          ? "열쇠는 자네에게 있네. 1층 과학실로 가 보게."
-          : "이 층의 다른 학자도 만나 보게."),
+        (progress.cleared.includes(id >> 1) ? ""
+          : hasKey(id >> 1) ? "<br><small>열쇠를 쓸 곳 · 1층 " + subject.lab + "</small>"
+          : "<br><small>같은 층의 학자 · " + nextRoom + " · " + scholars[other][0] + "</small>"),
       "대화 마치기",
     );
     return;
   }
-  const ask = (feedback = "", selected = null) => {
+  const ask = () => {
     show(
       "quiz",
       s[0],
@@ -724,9 +715,7 @@ function quiz(id) {
         portraitPath("scholar" + id) +
         '" alt="' +
         s[0] +
-        '"><div><div class="tag">' +
-        subjects[Math.floor(id / 2)].name +
-        "의 시련</div><p>" +
+        '"><div><p class="quiz-question">' +
         s[4] +
         "</p></div></div>" +
         s[5]
@@ -741,15 +730,16 @@ function quiz(id) {
               "</button>",
           )
           .join("") +
-        (feedback ? '<p class="small" role="status">' + feedback + "</p>" : ""),
+        '<p class="quiz-note" role="status" aria-live="polite"></p>',
     );
-    if (selected !== null) $("panel").querySelector(`[data-answer="${selected}"]`).focus();
     document.querySelectorAll("[data-answer]").forEach(
       (el) =>
         (el.onclick = () => {
           if (+el.dataset.answer !== s[6]) {
             playEffect("wrong");
-            ask("조금 더 생각해 보자. 다른 답을 골라 보세요.", el.dataset.answer);
+            el.classList.add("reconsider");
+            el.focus({ preventScroll: true });
+            $("panel").querySelector(".quiz-note").textContent = quizNotes[id][Number(el.dataset.answer)];
             return;
           }
           progress.learned.push(id);
@@ -767,17 +757,18 @@ function quiz(id) {
             s[7] +
               "<br><b>「" +
               s[1] +
-              "」 습득!</b> " +
+              "」</b> " +
               s[8] +
               (hasKey(n)
                 ? "<br>두 시련을 마쳐 <b>" + subjects[n].key + "</b>를 얻었다."
-                : ""),
-            "스킬 받기",
+                : "") +
+              (empty >= 0 ? "<br><kbd>" + slotKeys[empty] + "</kbd>에 장착했다." : "<br>스킬 배치에서 사용할 키를 고를 수 있다."),
+            "대화 마치기",
           );
         }),
     );
   };
-  dialogue(s[0], "scholar" + id, s[3], "시련에 도전", () => ask());
+  dialogue(s[0], "scholar" + id, s[3], "질문 듣기", ask);
 }
 function labChoice(name) {
   const ids = name === "물리지학실" ? [0, 3] : [1, 2];
@@ -981,7 +972,6 @@ function enemy(x, kind, boss = false) {
     time: 1.8,
     warn: 0,
     bolts: [],
-    step: 0,
     hit: 0,
     action: 0,
     dying: 0,
@@ -990,6 +980,35 @@ function enemy(x, kind, boss = false) {
     home: x,
     dir: -1,
   };
+}
+function stepHallFoe(e, dt) {
+  const dx = player.x - e.x;
+  if (e.warn > 0) {
+    e.warn = Math.max(0, e.warn - dt);
+    if (!e.warn) {
+      e.action = .32;
+      e.time = 1.35;
+      const forward = dx * e.dir;
+      if (forward >= -6 && forward <= 55 && Math.abs(player.y - e.y) < 37) hurt(5);
+    }
+    return;
+  }
+  if (e.action > 0) return;
+  e.time -= dt;
+  const inTerritory = Math.abs(player.x - e.home) < (e.chasing ? 245 : 215);
+  e.chasing = inTerritory && Math.abs(dx) < (e.chasing ? 210 : 175);
+  if (e.chasing && Math.abs(dx) < 55 && Math.abs(player.y - e.y) < 37 && e.time <= 0) {
+    e.dir = Math.sign(dx) || e.dir;
+    e.warn = .4;
+    return;
+  }
+  const patrolX = e.home + Math.sin(clock * .9 + e.home) * 36;
+  const travel = e.chasing ? Math.sign(dx) * Math.max(0, Math.abs(dx) - 32) : patrolX - e.x;
+  if (Math.abs(travel) > 1 && e.slow <= 0) {
+    e.dir = Math.sign(travel);
+    e.x += e.dir * Math.min(Math.abs(travel), (e.chasing ? 31 : 23) * dt);
+  }
+  e.y = GROUND - Math.abs(Math.sin(clock * 3 + e.home)) * 5;
 }
 function platforms() {
   if (scene.type === "gate") return [];
@@ -1055,8 +1074,13 @@ function setScene() {
   foes = [];
   cool.fill(0);
   keys.clear();
-  if (scene.type === "floor" && scene.floor >= 2)
-    foes = [enemy(440, 5), enemy(1840, 5)];
+  if (scene.type === "floor" && scene.floor >= 2) {
+    hallSpawnX.forEach((x, index) => {
+      const spawnId = (scene.floor - 2) * hallSpawnX.length + index;
+      if (!progress.clearedHallSpawns.includes(spawnId))
+        foes.push({ ...enemy(x, 5), spawnId, chasing: false });
+    });
+  }
   if (scene.type === "arena" || (scene.type === "roof" && !progress.won))
     foes = [enemy(scene.type === "roof" ? 638 : 603, scene.subject, true)];
   near = findNear();
@@ -1167,6 +1191,10 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
       e.dying = .7;
       combatEvent("defeat", e.x, chest, .68);
       mp = Math.min(60, mp + 7);
+      if (Number.isInteger(e.spawnId)) {
+        progress.clearedHallSpawns.push(e.spawnId);
+        save();
+      }
       playEffect("defeat");
     }
   }
@@ -1233,16 +1261,13 @@ function attack() {
 function cast(slot) {
   if (modal || foes.some(e => e.boss && e.dying)) return;
   let id = progress.slots[slot];
-  if (id == null) {
-    notify("학자의 시련으로 스킬을 배우고 K에서 배치하세요.");
-    return;
-  }
+  if (id == null) { showEquip(slot); return; }
   if (cool[id] > 0) {
-    notify("스킬이 다시 준비되고 있어요.");
+    notify(scholars[id][1] + " · " + cool[id].toFixed(1) + "초 후 사용 가능");
     return;
   }
   if (mp < 7) {
-    notify("마력이 회복될 때까지 기다리세요.");
+    notify(scholars[id][1] + "에 MP 7이 필요해요.");
     return;
   }
   player.castTime = 0.42;
@@ -1431,29 +1456,9 @@ function step(dt) {
     e.action = Math.max(0, e.action - dt);
     e.hit = Math.max(0, e.hit - dt);
     e.slow = Math.max(0, e.slow - dt);
-    const dist = p.x - e.x,
-      d = Math.sign(dist) || 1;
-    if (!e.boss) {
-      e.dir = d;
-      if (e.slow <= 0) {
-        if (Math.abs(dist) < 186 && Math.abs(p.x - e.home) < 245)
-          e.x += d * dt * 31;
-        else e.x += (e.home + Math.sin(clock * 0.9 + e.home) * 36 - e.x) * dt;
-      }
-      e.y = GROUND - Math.abs(Math.sin(clock * 3 + e.home)) * 5;
-    } else stepBoss(e, dt);
+    if (e.boss) stepBoss(e, dt);
+    else stepHallFoe(e, dt);
     e.moving = Math.abs(previousX - e.x) > 0.04;
-    if (!e.boss) {
-      e.time -= dt;
-      if (e.warn > 0) {
-        e.warn = Math.max(0, e.warn - dt);
-        if (!e.warn) {
-          e.action = 0.32;
-          e.time = 1.35;
-        }
-      } else if (Math.abs(dist) < 55 && e.time <= 0) e.warn = 0.32;
-    }
-    if (!e.boss && Math.abs(dist) < 19 && Math.abs(e.y - p.y) < 37) hurt(5);
     if (e.boss && !e.rush && Math.abs(e.x - p.x) < 23 && p.y > GROUND - 31) hurt(8);
   }
   if (modal) return;
@@ -1757,9 +1762,8 @@ function showSeal(i) {
   };
   $("backjournal").onclick = dismissPanel;
 }
-const continuingRun = load();
+load();
 setScene();
-if (!continuingRun) announceQuest();
 if (resumeFoe) {
   const boss = foes.find((e) => e.boss && e.kind === resumeFoe.kind);
   if (boss && Number.isFinite(resumeFoe.hp) && Number.isFinite(resumeFoe.x)) {

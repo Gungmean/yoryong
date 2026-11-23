@@ -95,14 +95,13 @@ function chooseQuestLeg() {
   }
   if (activeLeg !== best) {
     activeLeg = best;
-    $("qaction").textContent = best?.cue || freeExplore;
+    $("qaction").textContent = (scene.type === "classroom" ? best?.cue : best?.short) || freeExplore;
   }
   return best;
 }
 function syncQuest() {
   trackedQuest = currentQuest();
   routeLegs = buildQuestRoute(trackedQuest);
-  $("qchapter").textContent = trackedQuest === epilogue ? "탐험 완료" : "메인 퀘스트 · " + trackedQuest.chapter;
   $("qtitle").textContent = trackedQuest.title;
   $("quest").setAttribute("aria-label", "모험 일지 열기 (J) · " + trackedQuest.title);
   if (!chooseQuestLeg()) $("qaction").textContent = freeExplore;
@@ -110,13 +109,8 @@ function syncQuest() {
 
 const questNotices = [];
 let shownNotice = null;
-function announceQuest(completed = null) {
-  if (completed && !shownNotice?.completed) {
-    shownNotice = null;
-    if (questNotices.length && !questNotices[0].completed) questNotices.shift();
-    $("quest-notice").hidden = true;
-  }
-  questNotices.push({ completed, next: currentQuest(), remaining: completed ? 3.4 : 3 });
+function announceQuest(completed) {
+  questNotices.push({ completed, next: currentQuest(), remaining: 3.4 });
 }
 function resetQuestNotices() {
   questNotices.length = 0;
@@ -129,13 +123,12 @@ function advanceQuestNotice(dt) {
   if (!shownNotice && questNotices.length) {
     shownNotice = questNotices.shift();
     const {completed, next} = shownNotice;
-    notice.dataset.event = completed ? "complete" : "start";
-    $("qn-status").textContent = completed ? "퀘스트 완료" : "새 퀘스트";
-    $("qn-finished").textContent = completed?.title || "";
-    $("qn-caption").textContent = completed ? (next === epilogue ? "모험 완료 · 자유 탐험" : "다음 퀘스트") : next.chapter;
+    $("qn-status").textContent = "퀘스트 완료";
+    $("qn-finished").textContent = completed.title;
+    $("qn-caption").textContent = next === epilogue ? "자유 탐험" : "다음 퀘스트";
     $("qn-title").textContent = next.title;
     $("qn-portrait").src = portraitPath(next.art);
-    playEffect(completed ? "questComplete" : "questNew");
+    playEffect("questComplete");
   }
   if (!shownNotice) return;
   const action = shownNotice.next === trackedQuest && activeLeg ? activeLeg.short : shownNotice.next.place;

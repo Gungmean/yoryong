@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
-    <link rel="stylesheet" href="style.css?v=polish">
+    <link rel="stylesheet" href="style.css?v=school-notes">
   </head>
   <body>
     <main id="shell">
@@ -47,8 +47,8 @@
           </div>
           <p id="boss-warning" aria-live="polite"></p>
           <nav class="field-tools" aria-label="모험 정보">
-            <button id="quest" aria-haspopup="dialog" aria-keyshortcuts="J" aria-describedby="qaction"><span class="quest-heading"><i data-icon="quest"></i><small id="qchapter"></small><kbd>J</kbd></span>
-              <strong id="qtitle"></strong><span id="qaction"></span><span id="qshortcut">모험 일지</span></button>
+            <button id="quest" aria-haspopup="dialog" aria-keyshortcuts="J" aria-describedby="qaction"><span class="quest-heading"><i data-icon="quest"></i><strong id="qtitle"></strong><kbd>J</kbd></span>
+              <span id="qaction"></span><span id="qshortcut">모험 일지</span></button>
             <button id="menu" aria-label="모험 메뉴" data-tip="모험 메뉴 (Esc)"><i data-icon="globe"></i><span>메뉴</span></button>
           </nav>
         </div>
@@ -57,7 +57,7 @@
       </section>
       <section class="dock" aria-label="캐릭터 상태와 조작">
         <div class="player" role="group" aria-label="요룡이 상태">
-          <img class="field-badge" src="assets/ui/globe.png" width="40" height="40" alt="">
+          <img class="field-badge" src="assets/hero.png" width="44" height="44" alt="">
           <div class="stats">
             <div class="name"><small id="level"></small><b>요룡이</b><span class="school-name">부광고등학교</span></div>
             <div class="statline"><b>HP</b><span class="track hp"><i id="hpbar"></i></span><small id="hpval"></small></div>
@@ -80,7 +80,7 @@
     </main>
     <audio id="campus-music" preload="none" loop></audio>
     <audio id="battle-music" preload="none" loop></audio>
-    <script src="data.js?v=scholar-courses"></script>
+    <script src="data.js?v=school-notes"></script>
     <script src="assets/world/classrooms.js"></script>
     <script src="icons.js"></script>
     <script src="actor-sheets.js"></script>
@@ -89,10 +89,10 @@
     <script src="assets/audio/sfx/bank.js?v=scholar-sounds"></script>
     <script src="sound-effects.js?v=polish"></script>
     <script src="scholar-courses.js?v=classroom-finish"></script>
-    <script src="quests.js?v=experiments"></script>
-    <script src="bosses.js?v=recorded"></script>
+    <script src="quests.js?v=school-notes"></script>
+    <script src="bosses.js?v=school-notes"></script>
     <script src="victory.js?v=polish"></script>
-    <script src="game.js?v=classroom-finish"></script>
+    <script src="game.js?v=school-notes"></script>
     <script src="assets/world/atlas.js"></script>
     <script src="assets/world/school-rooms.js"></script>
     <script src="assets/world/fixtures.js"></script>

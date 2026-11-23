@@ -462,7 +462,7 @@ kbd {
 @media (pointer: coarse) and (min-width: 620px) and (max-height: 550px) {
   .dock {
     grid-template-columns: auto minmax(110px,180px) auto auto; justify-content: space-between;
-    grid-template-areas: "move vitals slots actions"; gap: 7px; padding-block: 5px max(5px,env(safe-area-inset-bottom));
+    grid-template-areas: "move vitals slots actions"; gap: 7px;
     padding-inline: max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right));
   }
   .player { grid-area: vitals; }
@@ -579,7 +579,7 @@ kbd {
   .quickbar { grid-column: 1 / -1; justify-self: center; }
 }
 @media (pointer: coarse) and (orientation: landscape) and (min-width: 490px) and (max-width: 659px) and (max-height: 550px) {
-  .dock { grid-template-columns: auto minmax(60px,1fr) auto; grid-template-areas: "vitals vitals controls" "move slots actions"; padding-block: 3px; gap: 4px; }
+  .dock { grid-template-columns: auto minmax(60px,1fr) auto; grid-template-areas: "vitals vitals controls" "move slots actions"; gap: 4px; }
   .controls { grid-area: controls; min-height: 25px; }
   .player { grid-area: vitals; }
   .quickbar { grid-area: slots; justify-self: center; }

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-11-23T00:24:50.538Z",
+        "reason": "Agent verified the reported dock bottom inset is 8 CSS px in Chromium at six desktop and mobile viewport sizes after removing both landscape overrides; the static finding reports zero."
+      }
+    ]
+  }
+}

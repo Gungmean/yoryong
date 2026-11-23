@@ -825,6 +825,7 @@ function render() {
   drawQuestArrow(player.x - cam);
   g.restore();
   ink.restore();
+  drawCutInLightning();
   if (!$("mapview").hidden) miniMap();
   revealArrival();
 }

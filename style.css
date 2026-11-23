@@ -738,7 +738,7 @@ kbd {
   position: absolute; inset: calc(45% - var(--cut-in-height) / 2 - var(--cut-in-tilt) / 2) 0 auto;
   height: calc(var(--cut-in-height) + var(--cut-in-tilt));
   clip-path: polygon(0 var(--cut-in-tilt),100% 0,100% calc(100% - var(--cut-in-tilt)),0 100%);
-  background: linear-gradient(90deg,var(--cut-in-color),#ffe6b3 68%,var(--cut-in-color));
+  background: #142237;
 }
 .cut-in-band::before {
   content: ""; position: absolute; inset: 3px 0 4px;
@@ -751,6 +751,11 @@ kbd {
   content: ""; position: absolute; inset: 8px 0 9px;
   clip-path: polygon(0 var(--cut-in-tilt),100% 0,100% 1px,0 calc(var(--cut-in-tilt) + 1px));
   background: color-mix(in srgb,var(--cut-in-color) 42%,#17263a);
+}
+#cut-in-bolts {
+  position: absolute;
+  inset: calc(45% - var(--cut-in-height) / 2 - var(--cut-in-tilt) / 2 - 28px) 0 auto;
+  width: 100%; height: calc(var(--cut-in-height) + var(--cut-in-tilt) + 56px);
 }
 .cut-in-engraving {
   position: absolute; inset: auto 0 7% auto; width: min(56vw,760px); aspect-ratio: 196 / 92;

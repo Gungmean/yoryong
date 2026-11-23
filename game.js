@@ -229,7 +229,7 @@ function save() {
     if (parseSave(previous)?.generation > runGeneration) return;
     const boss = foes.find((e) => e.boss);
     const encounter =
-      boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max } : null;
+      boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max, openStudy: boss.openStudy } : null;
     const next = JSON.stringify({
       generation: runGeneration, progress, scene, x: player.x, hp, mp,
       sound, musicEnabled, musicVolume, effectsVolume, reducedCombat, sceneryPaused, encounter,
@@ -344,11 +344,13 @@ function statusBars() {
   const b = foes.find((e) => e.boss);
   const meter = $("boss-meter");
   meter.hidden = !b || b.dying > 0;
-  const warning = b?.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint : "";
+  const warning = !b || b.dying ? "" : b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint
+    : wardClosed(b) ? "보호막 분석 중" : "보호막 해제 · 공격 가능";
   if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
   if (b) {
     const health = (100 * b.hp) / b.max;
     const percent = Math.ceil(health);
+    meter.classList.toggle("four-wards", bossStudies[b.kind].length === 4);
     meter.style.setProperty("--boss-health", health + "%");
     meter.setAttribute("aria-label", subjects[b.kind].boss + " 체력");
     meter.setAttribute("aria-valuenow", String(percent));
@@ -377,7 +379,7 @@ function show(kind, title, body, canClose = true) {
   $("overlay").hidden = false;
   const marks = { menu: "globe", map: "zelkova", equip: "slots", quest: "quest",
     lab: "flask", down: "rose", ending: "globe", seal: "globe",
-    dialogue: "quest", quiz: "atom", help: "map", reset: "globe" };
+    dialogue: "quest", quiz: "atom", ward: "atom", help: "map", reset: "globe" };
   $("panel").innerHTML = `<div class="panel-head"><i data-icon="${marks[kind]}"></i>
     <div class="book-title"><h2 id="paneltitle">${title}</h2>
     ${kind === "menu" ? '<p>부광고등학교 <span>창의(創意)</span></p>' : ''}</div>
@@ -505,7 +507,8 @@ function showQuest() {
                 : s.floor + "층 시련") +
             "</span></button>",
         )
-        .join(""),
+        .join("") + (progress.learned.length ? '<h3 class="collection-heading">학자들의 실험 노트</h3>' +
+          progress.learned.map(lessonEntry).join("") : ""),
   );
   $("panel").querySelectorAll("[data-seal]").forEach(button => {
     button.onclick = () => showSeal(Number(button.dataset.seal));
@@ -710,67 +713,29 @@ function quiz(id) {
     );
     return;
   }
-  const ask = () => {
-    show(
-      "quiz",
-      s[0],
-      '<div class="conversation"><img class="portrait" src="' +
-        portraitPath("scholar" + id) +
-        '" alt="' +
-        s[0] +
-        '"><div><p class="quiz-question">' +
-        s[4] +
-        "</p></div></div>" +
-        s[5]
-          .map(
-            (t, n) =>
-              '<button class="opt" data-answer="' +
-              n +
-              '"><kbd>' +
-              (n + 1) +
-              "</kbd>" +
-              t +
-              "</button>",
-          )
-          .join("") +
-        '<p class="quiz-note" role="status" aria-live="polite"></p>',
-    );
-    document.querySelectorAll("[data-answer]").forEach(
-      (el) =>
-        (el.onclick = () => {
-          if (+el.dataset.answer !== s[6]) {
-            playEffect("wrong");
-            el.classList.add("reconsider");
-            el.focus({ preventScroll: true });
-            $("panel").querySelector(".quiz-note").textContent = quizNotes[id][Number(el.dataset.answer)];
-            return;
-          }
-          progress.learned.push(id);
-          combatEvent("discovery", player.x, player.y, .95, { id });
-          let empty = progress.slots.indexOf(null);
-          if (empty >= 0) progress.slots[empty] = id;
-          const n = Math.floor(id / 2);
-          save();
-          refresh();
-          announceQuest(trialQuests[id]);
-          playEffect("correct");
-          dialogue(
-            s[0],
-            "scholar" + id,
-            s[7] +
-              "<br><b>「" +
-              s[1] +
-              "」</b> " +
-              s[8] +
-              (hasKey(n)
-                ? "<br>두 시련을 마쳐 <b>" + subjects[n].key + "</b>를 얻었다."
-                : "") +
-              (empty >= 0 ? "<br><kbd>" + slotKeys[empty] + "</kbd>에 장착했다." : "<br>스킬 배치에서 사용할 키를 고를 수 있다."),
-            "대화 마치기",
-          );
-        }),
-    );
-  };
+  const lesson = scienceLessons[id];
+  function finish() {
+    progress.learned.push(id);
+    const empty = progress.slots.indexOf(null);
+    if (empty >= 0) progress.slots[empty] = id;
+    combatEvent("discovery", player.x, player.y, .95, { id });
+    save();
+    refresh();
+    announceQuest(trialQuests[id]);
+    const key = hasKey(id >> 1) ? "<br>두 시련을 마쳐 <b>" + subject.key + "</b>를 얻었다." : "";
+    const slot = empty >= 0 ? "<br><kbd>" + slotKeys[empty] + "</kbd>에 장착했다." : "<br>스킬 배치에서 사용할 키를 고를 수 있다.";
+    dialogue(s[0], "scholar" + id, lesson.practice.why + "<br><b>「" + s[1] + "」</b> " + s[8] + key + slot, "대화 마치기");
+  }
+  function practice() {
+    studyQuestion({ title: s[0] + " · " + lesson.topic, art: "scholar" + id,
+      question: lesson.practice, lessonId: id }, finish);
+  }
+  function ask() {
+    studyQuestion({ title: s[0], art: "scholar" + id,
+      question: { prompt: s[4], choices: s[5], answer: s[6], hint: quizNotes[id] } }, () => {
+      dialogue(s[0], "scholar" + id, s[7] + "<br><br>" + lesson.note, "직접 풀어보기", practice);
+    });
+  }
   dialogue(s[0], "scholar" + id, s[3], "질문 듣기", ask);
 }
 function labChoice(name) {
@@ -1118,7 +1083,9 @@ function enterBattle(i,entryX=190) {
   playEffect("door");
   go(i === 4 ? "roof" : "arena", i === 4 ? 6 : 1, entryX, i);
   if (i === 4 && progress.won) return;
-  dialogue("요룡이", "hero", subjects[i].intro, "전투 시작");
+  const layers = bossStudies[i].length;
+  dialogue("요룡이", "hero", subjects[i].intro + "<br>보호막이 " + layers +
+    "겹이야. 관측 문제를 풀면 다음 체력 눈금까지 공격할 수 있어. 모르면 학자의 노트를 펼쳐 보자.", "첫 보호막 조사");
 }
 function winBoss(i) {
   playEffect("bossVictory");
@@ -1166,12 +1133,13 @@ function winBoss(i) {
   );
 }
 function hitFoe(e, n, skill = -1, dir = player.face) {
-  if (e.dying || !foes.includes(e)) return;
+  if (e.dying || !foes.includes(e) || wardClosed(e)) return;
   const wasAboveHalf = e.boss && bossPhase(e) === 1;
+  if (e.boss) n = Math.min(n, e.hp - studyFloor(e));
   e.hp = Math.max(0, e.hp - n);
   e.hit = 0.19;
   const chest = e.y - (e.boss ? e.height * .42 : 20);
-  texts.push({ x: e.x, y: chest - (e.boss ? 33 : 14), n, life: 0.68 });
+  texts.push({ x: e.x, y: chest - (e.boss ? 33 : 14), n: Math.ceil(n), life: 0.68 });
   spark(e.x, chest - 8, "#ffe39b", 8);
   if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.id === skill && fx.max - fx.life < .065)) {
     if (skill < 0) playEffect("hit");
@@ -1186,6 +1154,7 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
     if (!reducedMotion.matches) shake = Math.max(shake, 8);
     playEffect("phase");
   }
+  if (wardClosed(e)) save();
   if (e.hp <= 0) {
     e.warn = 0;
     e.action = 0;
@@ -1204,7 +1173,7 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
   }
 }
 function hurt(n) {
-  if (player.inv > 0 || modal) return;
+  if (player.inv > 0 || modal || foes.some(wardClosed)) return;
   hp = Math.max(0, hp - n);
   player.inv = 0.95;
   player.hurtTime = 0.26;
@@ -1248,7 +1217,7 @@ function spark(x, y, color, num = 10) {
     });
 }
 function attack() {
-  if (player.attackCD > 0 || modal || foes.some(e => e.boss && e.dying)) return;
+  if (player.attackCD > 0 || modal || foes.some(e => e.boss && (e.dying || wardClosed(e)))) return;
   player.attackCD = 0.34;
   player.swing = 0.2;
   combatEvent("slash", player.x, player.y - 29, .24, { dir: player.face });
@@ -1263,7 +1232,7 @@ function attack() {
       hitFoe(e, 16);
 }
 function cast(slot) {
-  if (modal || foes.some(e => e.boss && e.dying)) return;
+  if (modal || foes.some(e => e.boss && (e.dying || wardClosed(e)))) return;
   let id = progress.slots[slot];
   if (id == null) { showEquip(slot); return; }
   if (cool[id] > 0) {
@@ -1358,6 +1327,8 @@ function cast(slot) {
 }
 function step(dt) {
   if (modal) return;
+  const ward = foes.find(wardClosed);
+  if (ward) { challengeWard(ward); return; }
   if (contactPause > 0) {
     contactPause = Math.max(0, contactPause - dt);
     return;
@@ -1551,7 +1522,7 @@ function press(code, repeat = false) {
     if (
       !repeat &&
       code === "Escape" &&
-      !["down", "ending", "dialogue"].includes(modal)
+      !["down", "ending", "dialogue", "ward"].includes(modal)
     )
       dismissPanel();
     else if (!repeat && code === "Enter" && modal === "dialogue")
@@ -1613,7 +1584,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (modal && e.key === "Tab") {
-    const buttons = $("panel").querySelectorAll("button:not(:disabled), input:not(:disabled)");
+    const buttons = $("panel").querySelectorAll("button:not(:disabled), input:not(:disabled), summary");
     const first = buttons[0], last = buttons[buttons.length - 1];
     if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
       e.preventDefault();
@@ -1622,7 +1593,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   const digit = /^(?:Digit|Numpad)([0-6])$/.exec(e.code);
-  if (digit && modal === "quiz") {
+  if (digit && (modal === "quiz" || modal === "ward")) {
     if (!e.repeat) {
       $("panel").querySelector('[data-answer="' + (Number(digit[1]) - 1) + '"]')?.click();
     }
@@ -1773,7 +1744,8 @@ if (resumeFoe) {
   const boss = foes.find((e) => e.boss && e.kind === resumeFoe.kind);
   if (boss && Number.isFinite(resumeFoe.hp) && Number.isFinite(resumeFoe.x)) {
     const savedMax = resumeFoe.max > 0 ? resumeFoe.max : bossStats[boss.kind].oldHp;
-    boss.hp = clamp(resumeFoe.hp / savedMax, 0, 1) * boss.max;
+    boss.hp = savedMax === boss.max ? clamp(resumeFoe.hp, 0, boss.max) : clamp(resumeFoe.hp / savedMax, 0, 1) * boss.max;
+    if (resumeFoe.openStudy === studyRound(boss)) boss.openStudy = resumeFoe.openStudy;
     boss.x = clamp(resumeFoe.x, boss.half, worldWidth - boss.half);
     if (!boss.hp) beginBossClear(boss);
   }

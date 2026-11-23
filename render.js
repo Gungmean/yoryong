@@ -566,6 +566,20 @@ function monsters() {
     drawActor("foe" + e.kind, monsterFrame(e), x, e.y + bob, h, e.dir > 0);
     g.globalAlpha = 1;
     g.filter = "none";
+    if (e.boss && !e.dying && (wardClosed(e) || e.wardBreak > 0)) {
+      const gone = e.wardBreak > 0 ? 1 - e.wardBreak / .65 : 0;
+      const spread = quietCombat() ? 0 : gone * 24;
+      const y = e.y - h * .51, rx = e.half + 12 + spread, ry = h * .53 + 4 + spread;
+      g.save();
+      g.globalAlpha = (1 - gone) * .86;
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        const edge = [a + .08, a + .51, a + .96].map(t => [x + rx*Math.cos(t), y + ry*Math.sin(t)]);
+        fxLine(edge, subjects[e.kind].color, 3);
+        r(edge[1][0]-1, edge[1][1]-1, 3, 3, "#fff2d2");
+      }
+      g.restore();
+    }
     if (!e.boss && e.hp < e.max) {
       r(x - 10, e.y - h - 5, 20, 3, "#38333c");
       r(x - 10, e.y - h - 5, (20 * e.hp) / e.max, 2, "#e4a28c");

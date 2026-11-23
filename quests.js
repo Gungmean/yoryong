@@ -59,7 +59,7 @@ function buildQuestRoute(q) {
   }
   if (scene.type === "arena" || scene.type === "roof") {
     const boss = foes.find(e => e.boss);
-    return boss ? [passage(boss, "공격 예고에 맞춰 회피하세요.", "공격 예고가 보이면 회피")] : [];
+    return boss ? [passage(boss, "관측 문제를 풀어 보호막을 깨고, 다음 체력 눈금까지 공격하세요.", "보호막 해제 후 공격")] : [];
   }
   const destination = q.kind === "trial"
     ? classroomDoor(q.floor, scholarCourses[q.id].room)

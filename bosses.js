@@ -127,6 +127,7 @@ function releaseBossMove(e) {
 }
 
 function stepBoss(e, dt) {
+  e.wardBreak = Math.max(0, (e.wardBreak || 0) - dt);
   launchBossBolts(e, dt);
   if (e.rush) {
     const rush = e.rush, before = e.x;

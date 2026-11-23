@@ -272,6 +272,7 @@ function drawWardTechniques() {
 }
 
 const cutInBolts = $("cut-in-bolts");
+const cutInBand = document.querySelector(".cut-in-band");
 const lightningInk = cutInBolts.getContext("2d");
 const lightningTeeth = [
   [0,0], [.06,2], [.084,-6], [.114,4], [.166,-4], [.21,-3], [.23,-13],
@@ -291,6 +292,60 @@ function lightningPixels(points, mark) {
   }
 }
 
+function paintLightning(points, color, size, light = () => true) {
+  lightningInk.fillStyle = color;
+  const inset = Math.floor(size / 2);
+  lightningPixels(points, (x, y) => {
+    if (light(x)) lightningInk.fillRect(x - inset, y - inset, size, size);
+  });
+}
+
+function lightningForks(knots, side, crest, width, px, pad, age, color) {
+  const outside = side ? 1 : -1;
+  const release = clamp((age - .63) / .29, 0, 1);
+  for (const [i, index] of [3, 6, 10, 13, 17, 21, 25].entries()) {
+    const [x, y] = knots[index];
+    const direction = (i + side) % 2 ? -1 : 1;
+    const current = Math.max(0, 1 - Math.abs(x / width - crest) * 1.85);
+    const strength = Math.max(current, release * .85);
+    if (strength < .14) continue;
+
+    const reach = Math.min((50 + (i % 3) * 22) / px, pad * .72) * (.68 + strength * .32);
+    const spread = Math.min(width * .104, reach * 1.42);
+    const fork = [
+      [x,y], [x + direction * spread * .31,y + outside * reach * .19],
+      [x + direction * spread * .18,y + outside * reach * .43],
+      [x + direction * spread * .70,y + outside * reach * .59],
+      [x + direction * spread * .58,y + outside * reach * .84],
+      [x + direction * spread,y + outside * reach],
+    ];
+    const [tipX, tipY] = fork[fork.length - 1];
+    const [branchX, branchY] = fork[2];
+    const twig = [[branchX,branchY], [branchX - direction * spread * .32,branchY + outside * reach * .26],
+      [branchX - direction * spread * .21,branchY + outside * reach * .34],
+      [branchX - direction * spread * .58,branchY + outside * reach * .52]];
+    lightningInk.globalAlpha = strength * (1 - .42 * release);
+    paintLightning(fork, "#16283c", 5);
+    paintLightning(fork, color, 3);
+    paintLightning(fork, "#fff4d0", 1);
+    paintLightning(twig, color, 2);
+
+    const burst = .38 + release * 1.4;
+    for (let n = 0; n < 5; n++) {
+      const sparkX = tipX + direction * (4 + n * 4) * burst + Math.cos(n * 4 + index) * 7 * burst;
+      const sparkY = tipY + outside * (1 + n * 2.6) * burst;
+      const size = n === 0 ? 3 : 1 + (n % 2);
+      lightningInk.fillStyle = n % 2 ? color : "#fff4d0";
+      lightningInk.fillRect(Math.round(sparkX), Math.round(sparkY), size, size);
+      if (n === 0 && strength > .45) {
+        lightningInk.fillRect(Math.round(sparkX) - 2, Math.round(sparkY) + 1, 7, 1);
+        lightningInk.fillRect(Math.round(sparkX) + 1, Math.round(sparkY) - 2, 1, 7);
+      }
+    }
+  }
+  lightningInk.globalAlpha = 1;
+}
+
 function drawCutInLightning() {
   if (!cutInRemaining) return;
   const cutIn = $("scholar-cut-in");
@@ -308,39 +363,26 @@ function drawCutInLightning() {
   const quiet = quietCombat();
   const age = 1 - cutInRemaining / .94;
   const color = cutIn.style.getPropertyValue("--cut-in-color");
-  const slant = tilt / px, pad = 28 / px;
+  const slant = tilt / px, pad = (cutInBolts.clientHeight - cutInBand.clientHeight) / (2 * px);
   const breadth = height - slant - pad * 2;
   for (const side of [0, 1]) {
     const out = side ? 1 : -1;
     const crest = side ? (1 - age) * 1.3 - .14 : age * 1.3 - .14;
     const knots = lightningTeeth.map(([fraction, tooth], i) => {
       const bend = side ? lightningTeeth[lightningTeeth.length - 1 - i][1] : tooth;
+      const depth = quiet ? bend : bend * (bend < 0 ? 2.3 : 1.32);
       return [Math.round(fraction * (width - 1)),
-        Math.round(pad + side * breadth + (1 - fraction) * slant - out * bend / px)];
+        Math.round(pad + side * breadth + (1 - fraction) * slant - out * depth / px)];
     });
-    lightningInk.fillStyle = "#102134";
-    lightningPixels(knots, (x, y) => lightningInk.fillRect(x - 1, y - 2, 3, 5));
-    lightningInk.fillStyle = color;
-    lightningPixels(knots, (x, y) => lightningInk.fillRect(x, y - 1, 2, 3));
-    lightningInk.fillStyle = "#fff5d8";
-    lightningPixels(knots, (x, y) => {
-      if (quiet || Math.abs(x / width - crest) < .14) lightningInk.fillRect(x, y, 1, 1);
-    });
-    if (quiet) continue;
-    for (const index of [4, 9, 14, 19, 24]) {
-      const [x, y] = knots[index];
-      const active = Math.max(0, 1 - Math.abs(x / width - crest) * 3.6);
-      if (!active) continue;
-      const reach = Math.round((16 + (index % 3) * 4) / px), direction = side ? -1 : 1;
-      const endX = x + direction * reach * 2, endY = y + out * reach;
-      lightningInk.globalAlpha = active;
-      lightningInk.fillStyle = color;
-      lightningPixels([[x,y], [x + direction * reach,y + out * reach * .55],
-        [x + direction * reach * .76,y + out * reach * .73], [endX,endY]],
-      (sx, sy) => lightningInk.fillRect(sx, sy, 1, 1));
-      lightningInk.fillStyle = "#fff5d8";
-      lightningInk.fillRect(endX + direction * 3, endY + out, 2, 2);
+    if (!quiet) {
+      lightningForks(knots, side, crest, width, px, pad, age, color);
+      const echo = knots.map(([x, y], i) => [x, y + out * Math.round((19 + (i % 4) * 4) / px)]);
+      lightningInk.globalAlpha = .66;
+      paintLightning(echo, color, 2, x => (x / width + age * .8 + side * .21) % .38 < .27);
       lightningInk.globalAlpha = 1;
     }
+    paintLightning(knots, "#102134", quiet ? 5 : 8);
+    paintLightning(knots, color, quiet ? 3 : 5);
+    paintLightning(knots, "#fff4d0", quiet ? 1 : 2, x => quiet || Math.abs(x / width - crest) < .30);
   }
 }

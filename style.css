@@ -770,19 +770,21 @@ kbd {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   transform: translateY(-50%);
 }
-.cut-in-credit > div {
-  min-width: 0; color: #fff6e3; transform-origin: 28% center;
-  transform: translateY(calc(var(--cut-in-tilt) * .24)) rotate(-6deg);
+.cut-in-type {
+  flex: 1; min-width: 0; color: #fff2d6; transform: translateY(calc(var(--cut-in-tilt) * .24));
+  font-synthesis: none;
 }
-.cut-in-credit small, .cut-in-credit strong { display: block; word-break: keep-all; }
-.cut-in-credit small {
+.cut-in-type small, .cut-in-type strong { display: block; word-break: keep-all; }
+.cut-in-type small {
   font-size: clamp(13px,1.7vw,20px); color: var(--cut-in-color); margin-bottom: 5px;
   letter-spacing: .02em; text-shadow: 1px 2px #0b1728;
 }
-.cut-in-credit strong {
-  font-size: clamp(23px,min(5vw,9vh),64px); line-height: 1.15; text-wrap: balance;
+.cut-in-type strong {
+  font-size: clamp(23px,min(4vw,8vh),52px); line-height: 1.18; text-wrap: balance;
   text-shadow: 2px 3px #0b1728;
 }
+#cut-in-lettering { display: block; }
+.cut-in-type:has(#cut-in-lettering:not([hidden])) > :is(small,strong) { display: none; }
 #cut-in-portrait {
   width: min(33vw,calc(var(--cut-in-height) * 1.64)); height: calc(var(--cut-in-height) * 1.64);
   flex: none; object-fit: contain; image-rendering: pixelated;
@@ -803,7 +805,7 @@ kbd {
 @media (max-width: 580px) {
   #scholar-cut-in { --cut-in-height: clamp(106px,16vh,132px); }
   .cut-in-credit { width: 88%; }
-  .cut-in-credit strong { font-size: clamp(25px,7vw,35px); }
+  .cut-in-type strong { font-size: clamp(23px,6.5vw,32px); }
   .cut-in-engraving { width: 66vw; }
 }
 @media (pointer: coarse) {

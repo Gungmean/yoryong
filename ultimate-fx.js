@@ -374,3 +374,62 @@ function drawCutInLightning() {
     paintLightning(knots, "#fff4d0", quiet ? 1 : 2, x => quiet || Math.abs(x / width - crest) < .30);
   }
 }
+
+const cutInLettering = $("cut-in-lettering");
+const cutInType = cutInLettering.parentElement;
+const cutInTitle = $("cut-in-skill");
+const cutInScholar = $("cut-in-scholar");
+let cutInLetteringKey = "";
+
+function drawCutInLettering() {
+  if (!cutInRemaining || !document.fonts.check("12px Galmuri")) return;
+  const title = cutInTitle.textContent, scholar = cutInScholar.textContent;
+  const available = cutInType.clientWidth;
+  if (!available) return;
+  const color = $("scholar-cut-in").style.getPropertyValue("--cut-in-color");
+  const bandDepth = cutInBand.clientHeight - (parseFloat($("scholar-cut-in").style.getPropertyValue("--cut-in-tilt")) || 0);
+  const key = [title, scholar, available, bandDepth, color].join("|");
+  if (cutInLetteringKey === key) return;
+  cutInLetteringKey = key;
+
+  const face = "#fff2d6";
+  const wholeTitle = pixelLettering(title, face);
+  const words = title.split(" ");
+  const titleLines = wholeTitle.width * 2 + 5 > available && words.length > 1
+    ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")]
+    : [title];
+  const glyphs = titleLines.map(line => pixelLettering(line, face));
+  const largest = Math.max(...glyphs.map(run => run.width));
+  const headlineDots = Math.max(1, Math.min(5, Math.floor(bandDepth / 31), Math.floor((available - 5) / largest)));
+  const caption = pixelLettering(scholar, color);
+  const captionDots = available >= 245 && caption.width * 2 + 16 <= available ? 2 : 1;
+  const titleGap = 5;
+  const headerHeight = caption.height * captionDots;
+  cutInLettering.width = Math.max(largest * headlineDots + 4, caption.width * captionDots + 4);
+  cutInLettering.height = headerHeight + titleGap + glyphs.reduce((sum, run) => sum + run.height * headlineDots + 3, 0) + 2;
+  const ctx = cutInLettering.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+
+  const captionWidth = caption.width * captionDots;
+  ctx.drawImage(caption, 0, 0, captionWidth, headerHeight);
+  ctx.fillStyle = color;
+  const trimWidth = Math.max(0, Math.min(46, cutInLettering.width - captionWidth - 11));
+  if (trimWidth > 4) {
+    ctx.globalAlpha = .65;
+    ctx.fillRect(captionWidth + 9, Math.floor(headerHeight / 2), trimWidth, captionDots);
+    ctx.globalAlpha = 1;
+  }
+  let y = headerHeight + titleGap;
+  const weight = Math.max(1, Math.floor(headlineDots / 2));
+  for (const [index, run] of glyphs.entries()) {
+    const width = run.width * headlineDots, height = run.height * headlineDots;
+    ctx.drawImage(pixelLettering(titleLines[index], "#101b2b"), 2, y + 3, width, height);
+    ctx.globalAlpha = .47;
+    ctx.drawImage(pixelLettering(titleLines[index], color), 0, y + 2, width, height);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(run, weight, y, width, height);
+    ctx.drawImage(run, 0, y, width, height);
+    y += height + 3;
+  }
+  cutInLettering.hidden = false;
+}

@@ -826,6 +826,7 @@ function render() {
   g.restore();
   ink.restore();
   drawCutInLightning();
+  drawCutInLettering();
   if (!$("mapview").hidden) miniMap();
   revealArrival();
 }

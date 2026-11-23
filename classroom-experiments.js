@@ -8,8 +8,8 @@ function lessonSprite(name,x,y,w,h) {
   w ??= sw;
   h ??= sh;
   if (!classroomProps.naturalWidth || x+w/2<0 || x-w/2>W) return;
-  g.drawImage(classroomProps,sx,sy+classroomArtRow()*classroomPropAtlas.gradeStride,sw,sh,
-    Math.round(x-w/2),Math.round(y),w,h);
+  drawFieldCell(classroomProps, sx, sy + classroomArtRow()*classroomPropAtlas.gradeStride,
+    sw, sh, sw/2, 0, x, y, w/sw, h/sh, false);
 }
 
 function lessonCabinet(name,x,y,w) {
@@ -19,10 +19,10 @@ function lessonCabinet(name,x,y,w) {
 
 function lessonDesk(x,y,w,variation = 0) {
   if (x + w/2 < 0 || x - w/2 > W) return;
-  const l=x-w/2;
   groundContact(x+2,GROUND+1,w*1.15,8);
   if (assets.classrooms.naturalWidth)
-    g.drawImage(assets.classrooms,2+136*variation,1082,132,96,Math.round(l),y-16,w,GROUND-y+16);
+    drawFieldCell(assets.classrooms, 2+136*variation, 1082, 132, 96, 66, 0,
+      x, y-16, w/132, (GROUND-y+16)/96, false);
 }
 
 function lessonApple(x,y) {

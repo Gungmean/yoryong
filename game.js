@@ -8,6 +8,7 @@ const SAVE = "bugwang-quest-v1",
 let W = 800,
   H = 360,
   cam = 0,
+  cameraFollowX = 0,
   clock = 0,
   modal = "",
   sound = true,
@@ -113,6 +114,8 @@ assets.classrooms = new Image();
 assets.classrooms.src = classroomAtlasURL;
 assets.combat = new Image();
 assets.combat.src = "assets/combat/effects.webp";
+assets.summons = new Image();
+assets.summons.src = "assets/actors/summons.png";
 assets.spellFX = new Image();
 assets.spellFX.src = "assets/combat/pixelfx.webp";
 assets.victoryFX = new Image();
@@ -125,7 +128,7 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let sceneryPaused = false;
 for (const id of Object.keys(actorSheets)) {
   const sheet = new Image();
-  sheet.src = "assets/actors/" + id + ".png";
+  sheet.src = "assets/actors/" + id + ".png?v=field-pixels";
   assets["actor/" + id] = sheet;
 }
 for (const name of [
@@ -319,7 +322,7 @@ function refresh() {
   const sbutton = (key, id) => {
     const basic = key === "A", empty = !basic && id == null;
     const name = basic ? "기본 공격" : empty ? "빈 슬롯 · 스킬 배치" : scholars[id][1];
-    const src = basic ? icon("sword") : empty ? null : "assets/skill" + id + ".png";
+    const src = basic ? icon("sword") : empty ? null : "assets/ui/skill" + id + ".png";
     return `<button class="slot ${empty ? "locked" : "active"}" data-slot="${key}"
        aria-label="${key} · ${name}" data-tip="${name}">
        ${src ? `<img class="slot-art" src="${src}" alt="">` : ""}<kbd>${key}</kbd><span class="timer"></span></button>`;
@@ -520,7 +523,7 @@ const skillDetails = [
 ];
 function showEquip(activeSlot = 0) {
   const equipped = progress.slots[activeSlot];
-  const imageFor = (id) => id == null ? icon("lock") : "assets/skill" + id + ".png";
+  const imageFor = (id) => id == null ? icon("lock") : "assets/ui/skill" + id + ".png";
   const sockets = slotKeys.map((key, i) => {
     const id = progress.slots[i];
     return `<button class="socket" data-equip="${i}" aria-pressed="${i === activeSlot}">
@@ -1066,7 +1069,8 @@ function setScene() {
     recover: 0,
     stepDistance: 0,
   });
-  cam = cameraTarget();
+  cameraFollowX = cameraTarget();
+  cam = Math.round(cameraFollowX);
   shots = [];
   bossZones.length = 0;
   effects = [];
@@ -1436,9 +1440,10 @@ function step(dt) {
   } else if (!p.grounded) p.stepDistance = 0;
   if (keys.has("KeyA") || attackPointer !== null) attack();
   if (modal) return;
-  cam +=
-    (cameraTarget() - cam) *
+  cameraFollowX +=
+    (cameraTarget() - cameraFollowX) *
     (1 - Math.exp(-dt * 7));
+  cam = Math.round(cameraFollowX);
   for (let e of [...foes]) {
     if (e.dying) {
       e.dying = Math.max(0, e.dying - dt);

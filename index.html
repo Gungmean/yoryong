@@ -6,15 +6,17 @@
     <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
-    <link rel="stylesheet" href="style.css?v=dock-inset">
+    <link rel="stylesheet" href="style.css?v=field-pixels">
   </head>
   <body>
     <main id="shell">
       <h1 class="sr-only">요룡이의 과학 모험</h1>
       <section id="stage" aria-label="모험 필드">
-        <canvas id="map-depth" hidden aria-hidden="true"></canvas>
-        <canvas id="world" tabindex="0" aria-label="요룡이 모험 필드"></canvas>
-        <canvas id="field-lettering" aria-hidden="true"></canvas>
+        <div id="field-frame">
+          <canvas id="map-depth" hidden aria-hidden="true"></canvas>
+          <canvas id="world" tabindex="0" aria-label="요룡이 모험 필드"></canvas>
+          <canvas id="field-lettering" aria-hidden="true"></canvas>
+        </div>
         <div id="scene-shade" aria-hidden="true"></div>
         <div id="scene-arrival" role="status" aria-live="polite" aria-atomic="true">
           <div class="arrival-sign"><strong id="arrival-place"></strong><span id="arrival-detail"></span></div>
@@ -83,7 +85,7 @@
     <script src="data.js?v=school-notes"></script>
     <script src="assets/world/classrooms.js"></script>
     <script src="icons.js"></script>
-    <script src="actor-sheets.js"></script>
+    <script src="actor-sheets.js?v=field-pixels"></script>
     <script src="assets/combat/pixelfx.js"></script>
     <script src="assets/combat/victory-fx.js"></script>
     <script src="assets/audio/sfx/bank.js?v=scholar-sounds"></script>
@@ -92,16 +94,16 @@
     <script src="quests.js?v=school-notes"></script>
     <script src="bosses.js?v=school-notes"></script>
     <script src="victory.js?v=polish"></script>
-    <script src="game.js?v=school-notes"></script>
+    <script src="game.js?v=field-pixels"></script>
     <script src="assets/world/atlas.js"></script>
     <script src="assets/world/school-rooms.js"></script>
     <script src="assets/world/fixtures.js"></script>
     <script src="scenery.js?v=experiments"></script>
     <script src="assets/world/classroom-props.js"></script>
-    <script src="classroom-experiments.js?v=classroom-finish"></script>
+    <script src="classroom-experiments.js?v=field-pixels"></script>
     <script src="vendor/three-r187.min.js"></script>
-    <script src="map3d.js?v=scholar-courses"></script>
-    <script src="combat-fx.js?v=polish"></script>
-    <script src="render.js?v=experiments"></script>
+    <script src="map3d.js?v=field-pixels"></script>
+    <script src="combat-fx.js?v=field-pixels"></script>
+    <script src="render.js?v=field-pixels"></script>
   </body>
 </html>

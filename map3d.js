@@ -813,7 +813,7 @@ const campusWorld = (() => {
     else if (scene.type === "arena") laboratory();
     else rooftop();
     dressFloor();
-    if (canvas.width !== W || canvas.height !== H) renderer.setSize(W, H, false);
+    if (canvas.width !== cv.width || canvas.height !== cv.height) renderer.setSize(cv.width, cv.height, false);
     camera.left = -W / 2;
     camera.right = W / 2;
     camera.updateProjectionMatrix();
@@ -833,7 +833,7 @@ const campusWorld = (() => {
     try {
       if (!renderer) initialize();
       if (!renderer) return false;
-      const key = [scene.type, scene.floor, scene.room, scene.subject, scene.type === "roof" && progress.won, W].join(
+      const key = [scene.type, scene.floor, scene.room, scene.subject, scene.type === "roof" && progress.won, W, cv.width, cv.height].join(
         "/",
       );
       if (key !== lastKey) {
@@ -866,7 +866,7 @@ const campusWorld = (() => {
       // Reflected room light also reaches the painted wood and metal on the walking plane.
       paintedFurniture.color.setRGB(1+.052*warning,1+.014*warning,1+.065*warning);
       parallax.forEach(([mesh, rate, base = 0]) => {
-        mesh.position.x = base + cam * (1 - rate);
+        mesh.position.x = base + cam - snapX(cam * rate);
       });
       moving.forEach((fn) => fn(sceneryTime));
       renderer.render(stage, camera);

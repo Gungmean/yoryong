@@ -1,13 +1,18 @@
 "use strict";
 const cv = $("world"),
+  fieldFrame = $("field-frame"),
   g = cv.getContext("2d", { alpha: true }),
   lettering = $("field-lettering"),
   ink = lettering.getContext("2d"),
   mini = $("mapview").getContext("2d");
 let inkScaleX = 1, inkScaleY = 1, fieldDpr = 1;
+let fieldScaleX = 1, fieldScaleY = 1;
+const snapX = x => Math.round(x * fieldScaleX) / fieldScaleX;
+const snapY = y => Math.round(y * fieldScaleY) / fieldScaleY;
 const r = (x, y, w, h, c) => {
   g.fillStyle = c;
-  g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  const left = snapX(x), top = snapY(y);
+  g.fillRect(left, top, snapX(x+w)-left, snapY(y+h)-top);
 };
 function path(p, col) {
   g.fillStyle = col;
@@ -104,7 +109,17 @@ function sprite(n, x, y, h, flip = false) {
   if (im?.naturalWidth)
     img(n, x, y, (h * im.naturalWidth) / im.naturalHeight, h, flip);
 }
-// Each packed cell shares a foot pivot; leaps and recoils keep their drawn silhouette.
+// Snap both edges relative to the pivot. A flipped cell covers the mirror of
+// the same pixels, including asymmetric effects whose pivot lies outside it.
+function drawFieldCell(sheet, sx, sy, w, h, px, py, x, y, scaleX, scaleY, flip) {
+  const left = snapX(-px * scaleX), top = snapY(-py * scaleY);
+  const right = snapX((w - px) * scaleX), bottom = snapY((h - py) * scaleY);
+  g.save();
+  g.translate(snapX(x), snapY(y));
+  if (flip) g.scale(-1, 1);
+  g.drawImage(sheet, sx, sy, w, h, left, top, right-left, bottom-top);
+  g.restore();
+}
 function drawActor(id, frame, x, y, height, flip = false) {
   const sheet = assets["actor/" + id],
     spec = actorSheets[id];
@@ -112,24 +127,10 @@ function drawActor(id, frame, x, y, height, flip = false) {
     sprite(id, x, y, height, flip);
     return;
   }
-  const cell = spec.cell,
-    scale = height / spec.standingHeight,
-    size = Math.round(cell * scale);
-  g.save();
-  g.translate(Math.round(x), Math.round(y));
-  if (flip) g.scale(-1, 1);
-  g.drawImage(
-    sheet,
-    (frame % 4) * cell,
-    Math.floor(frame / 4) * cell,
-    cell,
-    cell,
-    -Math.round(size / 2),
-    -Math.round(spec.baseline * scale),
-    size,
-    size,
-  );
-  g.restore();
+  const {cell, baseline, standingHeight} = spec;
+  const scale = height / standingHeight;
+  drawFieldCell(sheet, (frame % 4)*cell, Math.floor(frame/4)*cell, cell, cell,
+    Math.round(cell/2), baseline, x, y, scale, scale, flip);
 }
 function heroFrame(p) {
   const panelTime = (performance.now() - panelSince) / 1000;
@@ -191,20 +192,34 @@ function star(x, y, s, col) {
   if (s > 2) r(x - 1, y - 1, 3, 3, col);
 }
 function resize() {
-  const b = cv.getBoundingClientRect();
-  W = Math.max(1, Math.round((b.width * H) / Math.max(1, b.height)));
-  cv.width = W;
-  cv.height = H;
+  const b = fieldFrame.getBoundingClientRect();
   fieldDpr = window.devicePixelRatio || 1;
-  lettering.width = Math.max(1, Math.round(b.width * fieldDpr));
-  lettering.height = Math.max(1, Math.round(b.height * fieldDpr));
+  const pitch = Math.max(1, Math.round(b.height * fieldDpr / H));
+  const left = Math.floor(b.left * fieldDpr), top = Math.floor(b.top * fieldDpr);
+  const cols = Math.max(1, Math.ceil((b.right * fieldDpr - left) / pitch));
+  const rows = Math.max(1, Math.ceil((b.bottom * fieldDpr - top) / pitch));
+  // Crop only the last partial dot. Both artwork layers use the same physical
+  // grid, while lettering still gets one backing pixel per device pixel.
+  fieldFrame.style.setProperty("--art-left", (left / fieldDpr - b.left) + "px");
+  fieldFrame.style.setProperty("--art-top", (top / fieldDpr - b.top) + "px");
+  fieldFrame.style.setProperty("--art-width", cols * pitch / fieldDpr + "px");
+  fieldFrame.style.setProperty("--art-height", rows * pitch / fieldDpr + "px");
+  W = Math.max(1, Math.round(cols * H / rows));
+  cv.width = cols;
+  cv.height = rows;
+  fieldScaleX = cols / W;
+  fieldScaleY = rows / H;
+  g.setTransform(fieldScaleX, 0, 0, fieldScaleY, 0, 0);
+  lettering.width = cols * pitch;
+  lettering.height = rows * pitch;
   ink.imageSmoothingEnabled = false;
   inkScaleX = lettering.width / W;
   inkScaleY = lettering.height / H;
   g.imageSmoothingEnabled = false;
-  cam = cameraTarget();
+  cameraFollowX = cameraTarget();
+  cam = snapX(cameraFollowX);
 }
-new ResizeObserver(resize).observe(cv);
+new ResizeObserver(resize).observe(fieldFrame);
 resize();
 function backdrop(name, w, h, offset, dressTile) {
   const im = assets[name];
@@ -763,6 +778,7 @@ function render() {
     resize();
   }
   if (fieldDpr !== (window.devicePixelRatio || 1)) resize();
+  cam = snapX(cameraFollowX);
   ink.clearRect(0, 0, lettering.width, lettering.height);
   ink.save();
   g.imageSmoothingEnabled = false;

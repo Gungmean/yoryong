@@ -39,10 +39,8 @@ function spellClip(name, t, x, y, scale = 1, alpha = 1, flip = false) {
   if (left > W || left + w * scale < 0 || y - py * scale > H) return;
   g.save();
   g.globalAlpha *= Math.min(1, alpha);
-  g.translate(Math.round(x), Math.round(y));
-  if (flip) g.scale(-1, 1);
-  g.drawImage(sheet, (i % cols) * w, row + Math.floor(i / cols) * h, w, h,
-    -Math.round(px * scale), -Math.round(py * scale), Math.round(w * scale), Math.round(h * scale));
+  drawFieldCell(sheet, (i % cols) * w, row + Math.floor(i / cols) * h, w, h,
+    px, py, x, y, scale, scale, flip);
   g.restore();
 }
 
@@ -115,13 +113,11 @@ function combatSprite(row, frame, x, y, scale = 1, flip = false, alpha = 1, scal
   if (x < -200 * scale || x > W + 200 * scale || alpha <= 0) return;
   g.save();
   g.globalAlpha *= Math.min(1, alpha);
-  g.translate(Math.round(x), Math.round(y));
-  g.scale(flip ? -scale : scale, scaleY);
   if (sheet.naturalWidth) {
-    g.drawImage(sheet, (frame & 7) * 208, row * 176, 208, 176, -124, -113, 208, 176);
+    drawFieldCell(sheet, (frame & 7)*208, row*176, 208, 176, 124, 113, x, y, scale, scaleY, flip);
   } else {
     // Keep attacks visible even during the initial texture download.
-    star(0, 0, row < 8 ? 14 : 9, row < 8 ? spellLight[row] : "#ffe0b4");
+    star(x, y, Math.max(1, Math.round((row < 8 ? 14 : 9) * scale)), row < 8 ? spellLight[row] : "#ffe0b4");
   }
   g.restore();
 }
@@ -443,7 +439,11 @@ function drawCombatGround() {
       g.globalAlpha = 0.84 * glow;
       fxArc(x, feet, 26 + 10 * t, 6, c);
       fxArc(x, feet - 2, 20 + 9 * t, 4, "#fff1c5", Math.PI, Math.PI * 2);
-      drawActor("scholar" + e.id, 4 + Math.min(3, Math.floor(t * 4)), x, feet, 74, e.flip);
+      const pose = Math.min(3, Math.floor(t * 4));
+      if (assets.summons.naturalWidth) {
+        drawFieldCell(assets.summons, pose*108, e.id*108, 108, 108, 54, 104,
+          x, feet, 1, 1, e.flip);
+      } else drawActor("scholar" + e.id, 4 + pose, x, feet, 74, e.flip);
       g.restore();
       if (!quietCombat() && t < .74) {
         const pulse = Math.sin(t / .74 * Math.PI), dir = e.flip ? -1 : 1;

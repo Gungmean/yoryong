@@ -422,10 +422,12 @@ function closePanel() {
   keys.clear();
 }
 function dialogue(name, asset, line, button, fn) {
-  const side = asset === "hero" ? "right" : "left";
+  const hero = asset === "hero";
+  const side = hero ? "right" : "left";
+  const portrait = `assets/portraits/dialogue/${asset}.png${hero ? "?v=hoodie" : ""}`;
   show("dialogue", name, `<div class="dialogue-stage" data-side="${side}">
     <div class="dialogue-speaker">
-      <img class="dialogue-portrait" src="assets/portraits/dialogue/${asset}.png" alt="">
+      <img class="dialogue-portrait" src="${portrait}" alt="">
       <h2 id="paneltitle" class="dialogue-name">${name}</h2>
     </div>
     <div class="dialogue-copy" tabindex="0"><p>${line}</p></div>

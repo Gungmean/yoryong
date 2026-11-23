@@ -300,47 +300,39 @@ function paintLightning(points, color, size, light = () => true) {
   });
 }
 
-function lightningForks(knots, side, crest, width, px, pad, age, color) {
-  const outside = side ? 1 : -1;
-  const release = clamp((age - .63) / .29, 0, 1);
-  for (const [i, index] of [3, 6, 10, 13, 17, 21, 25].entries()) {
-    const [x, y] = knots[index];
-    const direction = (i + side) % 2 ? -1 : 1;
-    const current = Math.max(0, 1 - Math.abs(x / width - crest) * 1.85);
-    const strength = Math.max(current, release * .85);
-    if (strength < .14) continue;
+// [launch position, length, distance from the band]. Both banks run uphill.
+const lightningLanes = [
+  [-.30,.50,30], [.12,.44,27], [.58,.53,33],
+  [-.25,.36,67], [.26,.53,63], [.70,.41,71],
+  [-.03,.32,100], [.49,.38,98],
+];
+const streakKinks = [[0,0], [.16,3], [.22,-2], [.40,1], [.49,-4], [.71,0], [.80,-3], [1,0]];
 
-    const reach = Math.min((50 + (i % 3) * 22) / px, pad * .72) * (.68 + strength * .32);
-    const spread = Math.min(width * .104, reach * 1.42);
-    const fork = [
-      [x,y], [x + direction * spread * .31,y + outside * reach * .19],
-      [x + direction * spread * .18,y + outside * reach * .43],
-      [x + direction * spread * .70,y + outside * reach * .59],
-      [x + direction * spread * .58,y + outside * reach * .84],
-      [x + direction * spread,y + outside * reach],
-    ];
-    const [tipX, tipY] = fork[fork.length - 1];
-    const [branchX, branchY] = fork[2];
-    const twig = [[branchX,branchY], [branchX - direction * spread * .32,branchY + outside * reach * .26],
-      [branchX - direction * spread * .21,branchY + outside * reach * .34],
-      [branchX - direction * spread * .58,branchY + outside * reach * .52]];
-    lightningInk.globalAlpha = strength * (1 - .42 * release);
-    paintLightning(fork, "#16283c", 5);
-    paintLightning(fork, color, 3);
-    paintLightning(fork, "#fff4d0", 1);
-    paintLightning(twig, color, 2);
+function lightningRush(side, width, base, slant, px, age, color) {
+  const outward = side ? 1 : -1;
+  const slope = slant / width;
+  const release = clamp((age - .65) / .29, 0, 1);
+  for (const [index, [launch, length, gap]] of lightningLanes.entries()) {
+    const start = width * (launch + (age - .5) * (.36 + index % 3 * .08) + side * .12);
+    const lengthPx = width * length * (.82 + .22 * release);
+    const y = base + outward * gap / px;
+    const points = streakKinks.map(([fraction, kink]) => {
+      const x = start + lengthPx * fraction;
+      return [x, y - x * slope + kink / px];
+    });
+    lightningInk.globalAlpha = (.55 + index % 3 * .11) * (1 - release * .34);
+    paintLightning(points, "#172740", index < 3 ? 6 : 4);
+    paintLightning(points, color, index < 3 ? 4 : 2);
+    const core = start + lengthPx * (.2 + (age + index * .19) % .6);
+    paintLightning(points, "#fff4d0", index < 3 ? 2 : 1, x => x >= core && x < core + lengthPx * .34);
 
-    const burst = .38 + release * 1.4;
-    for (let n = 0; n < 5; n++) {
-      const sparkX = tipX + direction * (4 + n * 4) * burst + Math.cos(n * 4 + index) * 7 * burst;
-      const sparkY = tipY + outside * (1 + n * 2.6) * burst;
-      const size = n === 0 ? 3 : 1 + (n % 2);
-      lightningInk.fillStyle = n % 2 ? color : "#fff4d0";
-      lightningInk.fillRect(Math.round(sparkX), Math.round(sparkY), size, size);
-      if (n === 0 && strength > .45) {
-        lightningInk.fillRect(Math.round(sparkX) - 2, Math.round(sparkY) + 1, 7, 1);
-        lightningInk.fillRect(Math.round(sparkX) + 1, Math.round(sparkY) - 2, 1, 7);
-      }
+    const end = start + lengthPx;
+    for (let spark = 0; spark < 3; spark++) {
+      const x = end + (9 + spark * 12) * (1 + release) / px;
+      const size = (8 - spark * 2 + release * 7) / px;
+      const py = y - x * slope + (spark === 1 ? 4 : -2) / px;
+      paintLightning([[x,py], [x + size,py - size * slope]],
+        spark % 2 ? color : "#fff4d0", spark ? 1 : 2);
     }
   }
   lightningInk.globalAlpha = 1;
@@ -351,7 +343,7 @@ function drawCutInLightning() {
   const cutIn = $("scholar-cut-in");
   const boundsWidth = cutIn.clientWidth;
   if (!boundsWidth) return;
-  const tilt = clamp(boundsWidth * .07, 10, 140);
+  const tilt = clamp(boundsWidth * .145, 28, 196);
   const tiltValue = tilt + "px";
   if (cutIn.style.getPropertyValue("--cut-in-tilt") !== tiltValue) cutIn.style.setProperty("--cut-in-tilt", tiltValue);
   const px = boundsWidth < 600 ? 2 : 3;
@@ -367,19 +359,15 @@ function drawCutInLightning() {
   const breadth = height - slant - pad * 2;
   for (const side of [0, 1]) {
     const out = side ? 1 : -1;
-    const crest = side ? (1 - age) * 1.3 - .14 : age * 1.3 - .14;
+    const crest = age * 1.35 - .16 - side * .12;
     const knots = lightningTeeth.map(([fraction, tooth], i) => {
       const bend = side ? lightningTeeth[lightningTeeth.length - 1 - i][1] : tooth;
-      const depth = quiet ? bend : bend * (bend < 0 ? 2.3 : 1.32);
+      const depth = quiet ? bend * .55 : bend;
       return [Math.round(fraction * (width - 1)),
         Math.round(pad + side * breadth + (1 - fraction) * slant - out * depth / px)];
     });
     if (!quiet) {
-      lightningForks(knots, side, crest, width, px, pad, age, color);
-      const echo = knots.map(([x, y], i) => [x, y + out * Math.round((19 + (i % 4) * 4) / px)]);
-      lightningInk.globalAlpha = .66;
-      paintLightning(echo, color, 2, x => (x / width + age * .8 + side * .21) % .38 < .27);
-      lightningInk.globalAlpha = 1;
+      lightningRush(side, width, pad + side * breadth + slant, slant, px, age, color);
     }
     paintLightning(knots, "#102134", quiet ? 5 : 8);
     paintLightning(knots, color, quiet ? 3 : 5);

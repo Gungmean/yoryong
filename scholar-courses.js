@@ -22,16 +22,16 @@ const scholarCourses = [
     devices:[[775,"He · 2번 카드","card"],[252,"O · 8번 카드","card"],[600,"Ne · 10번 카드","card"]],
     cues:["칠판의 2 → 8 → 10 순서대로 교실에서 원소 카드를 찾으세요."],
     finish:"카드를 맞췄어요. 교실 왼쪽의 멘델레예프에게 돌아가세요."},
-  {floor:4,room:5,name:"창가의 완두", scholar:[775,199], stages:2,
+  {floor:4,room:5,name:"완두의 광합성", scholar:[775,199], stages:2, revision:"gas-exchange",
     steps:[[752,279,76,"vine"],[824,241,68,"vine"],[761,199,100,"vine"]],
-    devices:[[196,"싱크대에서 물 받기","sink"],[761,"완두 화분에 물 주기","plant"]],
-    cues:["교실 앞 싱크대에서 물뿌리개를 채우세요.","창가의 완두 화분에 물을 주세요."],
-    finish:"화분에서 올라온 덩굴의 넓은 잎을 밟고 올라가세요."},
-  {floor:4,room:2,name:"창가의 새 관찰", scholar:[233], stages:1,
+    devices:[[196,"어둠에서 O₂ 재기","darkMeter"],[761,"조명 켜고 O₂ 재기","lamp"]],
+    cues:["왼쪽 측정기에서 빛을 받지 않은 완두의 산소 변화를 재세요.","창가 조명을 켜고 같은 시간 동안 산소 변화를 재세요."],
+    finish:"빛을 켜자 산소가 늘었어요. 덩굴 발판을 타고 올라가 멘델과 두 기록을 비교하세요."},
+  {floor:4,room:2,name:"발아 씨앗의 세포 호흡", scholar:[233], stages:2, revision:"gas-exchange",
     steps:[[491,278,81,"desk"],[618,230,78,"spring"],[729,155,92,"perch"]],
-    devices:[[745,"새의 부리 관찰하기","nest",155]],
-    cues:["책상에서 큰 잎으로 뛰세요. 잎이 튕겨 올리면 위쪽 둥지에서 ↑를 누르세요."],
-    finish:"관찰을 끝냈어요. 교실 앞쪽의 다윈에게 돌아가세요."},
+    devices:[[283,"유리구슬 대조군 측정","control"],[745,"발아 씨앗의 O₂ 재기","seedMeter",155]],
+    cues:["아래 실험대의 유리구슬 용기에서 산소 변화를 기록하세요.","책상과 튕기는 잎을 밟고 올라가 같은 조건에서 발아 씨앗의 산소 변화를 재세요."],
+    finish:"씨앗 용기에서 산소가 줄었어요. 교실 앞쪽의 다윈에게 두 기록을 가져가세요."},
   {floor:5,room:6,name:"맞물리는 두 대륙", scholar:[552], stages:1,
     devices:[[260,"남아메리카 지도 이동","mapCrank"],[826,"아프리카 지도 이동","mapCrank"]],
     steps:[[958,280,80,"desk"]],
@@ -48,11 +48,14 @@ const massWindow = 2.35;
 let courseRun = null;
 
 function normalizeCourseRecord(id, record) {
-  let stage = Number.isInteger(record.stage) ? clamp(record.stage,0,scholarCourses[id].stages) : 0;
+  const definition = scholarCourses[id];
+  if (definition.revision && record.revision !== definition.revision)
+    return {stage:0, settings:[0,0], revision:definition.revision};
+  let stage = Number.isInteger(record.stage) ? clamp(record.stage,0,definition.stages) : 0;
   const settings = [0,1].map(i => [0,1,2].includes(record.settings?.[i]) ? record.settings[i] : 0);
   if (id === 1 || id === 6) stage = Number(settings[0] === (id === 1 ? 1 : 2) && settings[1] === 2);
   if (id === 2 && stage === 1) stage = 0;
-  return {stage,settings};
+  return {stage,settings,revision:definition.revision};
 }
 
 function restoreCourseRecords(records, legacy) {
@@ -70,7 +73,7 @@ function beginCourse() {
     const definition = scholarCourses[id];
     const record = progress.courseStates[id];
     const known = progress.learned.includes(id);
-    const stage = known ? definition.stages : (record?.stage ?? 0);
+    const stage = known && !definition.revision ? definition.stages : (record?.stage ?? 0);
     const settings = known && (id === 1 || id === 6)
       ? [id === 1 ? 1 : 2, 2] : (record?.settings.slice() ?? [0,0]);
     courseRun = {
@@ -91,7 +94,7 @@ function courseSolved() {
 
 function courseRecord() {
   if (!courseRun) return null;
-  return {id:courseRun.id, stage:courseRun.stage, settings:courseRun.settings};
+  return {id:courseRun.id, stage:courseRun.stage, settings:courseRun.settings, revision:courseRun.definition.revision};
 }
 
 function courseDevices() {
@@ -148,8 +151,8 @@ function useCourseDevice(device) {
     [],
     ["밀폐 완료. 표시등이 꺼지기 전에 기록하세요.","반응 전후의 질량이 같아요."],
     ["He 카드를 놓았어요.","O 카드를 놓았어요.","원소 카드 세 장을 순서대로 놓았어요."],
-    ["물뿌리개를 채웠어요.","완두 줄기가 창가를 타고 자라요."],
-    ["둥지에서 새의 부리를 관찰했어요."],
+    ["어둠 · 완두 용기 O₂ −2. 빛이 없어도 산소가 줄었어요.","조명 아래 · 완두 용기 O₂ +4. 어둠 속 기록과 비교해 보세요."],
+    ["대조군 · 유리구슬 용기 O₂ 변화 0.","발아 씨앗 · O₂ −3. 빛이 없는 조건에서도 씨앗이 산소를 사용했어요."],
     [],
     ["첫 진동을 기록했어요.","두 지진계에 모두 신호가 잡혔어요."],
   ];

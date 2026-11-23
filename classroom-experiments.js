@@ -158,16 +158,35 @@ function lessonLeaf(x,y,w,trunk) {
   lessonSprite("leaf",x,y,w,17);
 }
 
+function oxygenVessel(x, y, seeds) {
+  r(x-16,y-31,32,30,"#374e4e");
+  r(x-14,y-29,28,27,"#b2c3ac");
+  r(x-11,y-26,22,22,"#d5d2aa");
+  r(x-16,y-33,32,4,"#6c7c69");
+  r(x-13,y-27,2,21,"#eef0cb");
+  for (const dx of [-7,0,7]) {
+    r(x+dx-2,y-9,5,4,seeds ? "#996640" : "#718b83");
+    if (seeds) strokePixels([[x+dx,y-9],[x+dx+1,y-15],[x+dx+4,y-16]],"#6e894c",2);
+  }
+}
+
 function plantScene(run, positions) {
-  const [sink,plant] = positions;
-  lessonCabinet("lab-counter",sink,269,74);
-  path([[sink-24,269],[sink-18,266],[sink+18,266],[sink+23,269],[sink+19,274],[sink-20,274]],"#8a9586");
-  r(sink-17,268,34,3,"#596e65");
-  r(sink-18,271,37,1,"#c2c2a4");
-  strokePixels([[sink-2,268],[sink-2,252],[sink+10,252],[sink+10,257]],"#537169",4);
-  strokePixels([[sink-3,265],[sink-3,251],[sink+9,251]],"#c0c5a8");
+  const [meter,plant] = positions;
+  lessonCabinet("lab-counter",meter,269,74);
+  oxygenVessel(meter,270,true);
+  if (run.stage >= 1) label("어둠  O₂ −2",meter,223,"#ffedcc","#41534e",9);
   const height = courseSolved() ? clamp(.16+(run.time-run.changedAt)*1.6,0,1) : 0;
   const top = 287 - 103*height;
+  const lamp = plant+57;
+  strokePixels([[lamp,280],[lamp,226],[lamp-17,219]],"#615748",4);
+  path([[lamp-28,219],[lamp-13,214],[lamp-4,223],[lamp-27,229]],"#ac8352");
+  if (height) {
+    g.save();
+    g.globalAlpha = .26;
+    path([[lamp-21,227],[lamp-7,224],[plant+17,292],[plant-27,292]],"#ffe7a0");
+    g.restore();
+    label("조명  O₂ +4",lamp+8,198,"#ffedcc","#41534e",9);
+  }
   for (const xx of [plant-17,plant+17]) {
     r(xx,189,3,105,"#9a744e");
     r(xx+1,189,1,105,"#c39966");
@@ -175,18 +194,15 @@ function plantScene(run, positions) {
   for (const y of [201,232,263]) r(plant-17,y,35,2,"#ad8c60");
   pottedStem(plant,top,29);
   for (const p of run.platforms) if (p.active) lessonLeaf(p.x-cam,p.y,p.w,plant);
-  if (run.stage===1) {
-    const x = player.x-cam+player.face*17, y=player.y-20;
-    r(x-5,y,12,8,"#618a80");
-    r(x+3,y+1,8,2,"#9cb6a2");
-    r(x-3,y-3,5,3,"#679285");
-  }
   if (height>.85) for (const dx of [-4,4]) star(plant+dx,185,3,"#e8cec0");
 }
 
-function birdScene(run) {
+function respirationScene(run, [control, sample]) {
   const leaf = run.platforms[1], perch = run.platforms[2];
-  const plant=leaf.x-cam, x=perch.x-cam, y=perch.y, nest=x+13;
+  const plant=leaf.x-cam, x=perch.x-cam, y=perch.y;
+  lessonCabinet("lab-counter",control,269,73);
+  oxygenVessel(control,270,false);
+  if (run.stage >= 1) label("유리구슬  O₂ 0",control,223,"#ffedcc","#41534e",9);
   pottedStem(plant,leaf.y,35);
   lessonLeaf(plant,leaf.y,leaf.w,plant);
   const l=x-perch.w/2;
@@ -195,8 +211,8 @@ function birdScene(run) {
     strokePixels([[leg-1,y+5],[leg-1,y+20],[leg+6,y+8]],"#b29060");
   }
   lessonSprite("lift-deck",x,y,perch.w,7);
-  lessonSprite("nest-bird",nest,y-21);
-  if (courseSolved()) r(nest+5,y-17,1,1,"#e3cba5");
+  oxygenVessel(sample,y,true);
+  if (courseSolved()) label("발아 씨앗  O₂ −3",sample,y-44,"#ffedcc","#41534e",9);
 }
 
 function mapScene(run, positions) {
@@ -255,7 +271,7 @@ function tremorScene(run, positions) {
   }
 }
 
-const experimentScenes = [weighScene,opticalScene,sealedScene,cardsScene,plantScene,birdScene,mapScene,tremorScene];
+const experimentScenes = [weighScene,opticalScene,sealedScene,cardsScene,plantScene,respirationScene,mapScene,tremorScene];
 
 function drawScholarCourse() {
   const run = courseRun;

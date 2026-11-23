@@ -709,7 +709,8 @@ function showHelp() {
 function quiz(id) {
   const s = scholars[id];
   const subject = subjects[Math.floor(id / 2)];
-  if (progress.learned.includes(id)) {
+  const known = progress.learned.includes(id);
+  if (known && !scholarCourses[id].revision) {
     const other = id ^ 1;
     const nextRoom = classroomDoor(subject.floor, scholarCourses[other].room).name;
     dialogue(
@@ -725,6 +726,10 @@ function quiz(id) {
   }
   const lesson = scienceLessons[id];
   function finish() {
+    if (known) {
+      dialogue(s[0], "scholar" + id, lesson.practice.why, "대화 마치기");
+      return;
+    }
     progress.learned.push(id);
     const empty = progress.slots.indexOf(null);
     if (empty >= 0) progress.slots[empty] = id;
@@ -1021,6 +1026,7 @@ function classroomPanels() {
 const classroomArtRow = () => Math.max(0, scene.floor - 3);
 function setScene() {
   contactPause = 0;
+  advanceScholarCutIn(Infinity);
   battleRate = 1;
   worldWidth = mapWidths[scene.type];
   beginCourse();
@@ -1063,8 +1069,15 @@ function setScene() {
         foes.push({ ...enemy(x, 5), spawnId, chasing: false });
     });
   }
-  if (scene.type === "arena" || (scene.type === "roof" && !progress.won))
+  if (scene.type === "arena" || (scene.type === "roof" && !progress.won)) {
     foes = [enemy(scene.type === "roof" ? 638 : 603, scene.subject, true)];
+    for (const [id] of bossStudies[scene.subject]) {
+      const path = "portrait/" + id;
+      if (assets[path]) continue;
+      assets[path] = new Image();
+      assets[path].src = portraitPath("scholar" + id);
+    }
+  }
   near = findNear();
   refresh();
   syncMusic();
@@ -1339,13 +1352,14 @@ function cast(slot) {
   statusBars();
 }
 function step(dt) {
+  advanceScholarCutIn(dt);
   if (modal && modal !== "ward") return;
   if (modal === "ward") updateWardTimer(dt);
   else {
     const ward = foes.find(wardClosed);
     if (ward) {
       ward.studyRetry = Math.max(0, ward.studyRetry - dt);
-      if (!ward.studyRetry) challengeWard(ward);
+      if (!ward.studyRetry && !cutInRemaining) challengeWard(ward);
     }
   }
   const reading = modal === "ward";

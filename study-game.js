@@ -133,9 +133,28 @@ function refreshScholarUltimate(boss) {
   if ($("ultimate-name").textContent !== name) $("ultimate-name").textContent = name;
 }
 
+let cutInRemaining = 0;
+
+function showScholarCutIn(id) {
+  const cutIn = $("scholar-cut-in");
+  $("cut-in-portrait").src = portraitPath("scholar" + id);
+  $("cut-in-scholar").textContent = scholars[id][0];
+  $("cut-in-skill").textContent = scholars[id][1];
+  cutIn.style.setProperty("--cut-in-color", subjects[id >> 1].color);
+  cutIn.toggleAttribute("data-quiet", quietCombat());
+  cutInRemaining = .94;
+  cutIn.hidden = false;
+}
+
+function advanceScholarCutIn(dt) {
+  if (!cutInRemaining) return;
+  cutInRemaining = Math.max(0, cutInRemaining - dt);
+  if (!cutInRemaining) $("scholar-cut-in").hidden = true;
+}
+
 function castScholarUltimate() {
   const boss = foes.find(e => e.boss);
-  if (modal || !boss?.ultimates.length || boss.dying || wardClosed(boss)) return;
+  if (modal || cutInRemaining || !boss?.ultimates.length || boss.dying || wardClosed(boss)) return;
   const [id] = bossStudies[boss.kind][boss.ultimates.shift()];
   const count = bossStudies[boss.kind].length;
   const round = studyRound(boss);
@@ -144,12 +163,16 @@ function castScholarUltimate() {
   const dir = Math.sign(boss.x - player.x) || player.face;
   player.castTime = .42;
   player.inv = Math.max(player.inv, .85);
+  showScholarCutIn(id);
   combatEvent("summon", player.x - dir * 36, player.y - 38, 1.15, {id, flip:dir < 0, ultimate:true});
   combatEvent("scholarUltimate", boss.x, boss.y, .95, {id, height:boss.height, dir});
   playEffect(skillSounds[id].cast);
   if (skillSounds[id].onGround) playEffect(skillSounds[id].impact);
   hitFoe(boss, damage, id, dir);
-  if (!quietCombat()) shake = Math.max(shake, 8);
+  if (!quietCombat()) {
+    shake = Math.max(shake, 8);
+    contactPause = Math.max(contactPause, .16);
+  }
   refreshScholarUltimate(boss);
   save();
   $("world").focus({preventScroll:true});

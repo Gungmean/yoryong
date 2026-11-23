@@ -5,7 +5,7 @@ const entranceQuest = {
   story: "종이 울렸는데 운동장은 조용하다. 중앙 현관 너머에서 희미한 빛이 새어 나온다.",
   place: "정문 · 중앙 현관", reward: "본관 탐험", art: "hero", kind: "entrance",
 };
-const trialTitles = ["떨어지는 사과", "빛의 약속", "저울 위의 비밀", "빈칸이 있는 표", "완두콩의 편지", "섬새의 부리", "갈라진 대륙", "지구의 심장"];
+const trialTitles = ["떨어지는 사과", "빛의 약속", "저울 위의 비밀", "빈칸이 있는 표", "빛을 받은 완두", "씨앗의 세포 호흡", "갈라진 대륙", "지구의 심장"];
 const bossTitles = ["어긋난 궤도", "끓어오르는 실험실", "나선숲의 울림", "쏟아지는 별의 파편", "옥상의 마지막 균열"];
 const trialQuests = scholars.map((scholar, id) => {
   const subject = subjects[Math.floor(id / 2)];

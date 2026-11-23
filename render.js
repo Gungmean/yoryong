@@ -818,6 +818,7 @@ function render() {
   chooseQuestLeg();
   friendlyEffects();
   character();
+  drawWardTechniques();
   threatEffects();
   if (defeated) drawBossClearFront(defeated);
   drawQuestArrow(player.x - cam);

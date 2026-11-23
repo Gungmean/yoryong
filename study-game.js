@@ -29,24 +29,20 @@ function studyQuestion({ title, art, question, lessonId }, onCorrect) {
   });
 }
 
-function studyRound(boss) {
-  const count = bossStudies[boss.kind].length;
-  return Math.min(count - 1, Math.floor((boss.max - boss.hp) * count / boss.max));
-}
-
-function studyFloor(boss) {
-  if (boss.hp > firstWardHP(boss) && boss.openStudy !== 0) return firstWardHP(boss);
-  const count = bossStudies[boss.kind].length;
-  return Math.floor(boss.max * (count - studyRound(boss) - 1) / count);
-}
-
-function firstWardHP(boss) {
-  return Math.floor(boss.max * .85);
-}
+const classroomWardMarks = [72, 35], rooftopWardMarks = [80, 60, 38, 18];
+const wardThresholds = kind => kind === 4 ? rooftopWardMarks : classroomWardMarks;
+const nextWard = boss => (boss.openStudy ?? -1) + 1;
+const studyFloor = boss => Math.floor(boss.max * (wardThresholds(boss.kind)[nextWard(boss)] ?? 0) / 100);
+const wardTechniques = [
+  "홍염 사과 낙하", "정지한 시계", "황금의 평형추", "자수정 원소진",
+  "새싹의 용틀임", "황금 날개 군무", "대륙판 충돌", "내핵 공명",
+];
 
 function wardClosed(boss) {
-  return boss.boss && boss.hp > 0 && boss.hp <= firstWardHP(boss) && boss.openStudy !== studyRound(boss);
+  return boss.boss && boss.hp > 0 && boss.hp <= studyFloor(boss);
 }
+
+const wardPrimed = boss => boss.boss && boss.readyWard === nextWard(boss) && wardClosed(boss);
 
 // Rates follow real time so lingering over a choice never stalls the recovery ramp.
 let battleRate = 1;
@@ -80,10 +76,11 @@ function updateWardTimer(dt) {
 }
 
 function challengeWard(boss) {
-  const round = studyRound(boss);
+  const round = nextWard(boss);
   const stages = bossStudies[boss.kind];
   const [, question] = stages[round];
   contactPause = 0;
+  boss.wardBreak = 0;
   wardAttempt = { boss, time: wardTimeLimit };
   const field = $("ward-question");
   beginPanel("ward", field);
@@ -104,14 +101,10 @@ function challengeWard(boss) {
         updateWardTimer(3);
         return;
       }
-      boss.openStudy = round;
-      boss.ultimates.push(round);
-      player.inv = Math.max(player.inv, 1.2);
+      boss.readyWard = round;
       closePanel();
-      boss.wardBreak = .65;
       playEffect("correct");
-      playEffect("phase");
-      notify("보호막 해제 · " + question.why, 6500);
+      notify("정답 · " + question.why, 6500);
       statusBars();
       save();
     };
@@ -124,12 +117,10 @@ function challengeWard(boss) {
 
 function refreshScholarUltimate(boss) {
   const button = $("scholar-ultimate");
-  const round = boss?.ultimates[0];
-  button.hidden = round == null || boss.dying > 0 || modal === "ward";
+  button.hidden = !boss || !wardPrimed(boss) || Boolean(boss.wardCast) || Boolean(modal);
   if (button.hidden) return;
-  button.disabled = wardClosed(boss);
-  const [id] = bossStudies[boss.kind][round];
-  const name = scholars[id][1] + (boss.ultimates.length > 1 ? " ×" + boss.ultimates.length : "");
+  const [id] = bossStudies[boss.kind][boss.readyWard];
+  const name = wardTechniques[id];
   if ($("ultimate-name").textContent !== name) $("ultimate-name").textContent = name;
 }
 
@@ -139,7 +130,7 @@ function showScholarCutIn(id) {
   const cutIn = $("scholar-cut-in");
   $("cut-in-portrait").src = portraitPath("scholar" + id);
   $("cut-in-scholar").textContent = scholars[id][0];
-  $("cut-in-skill").textContent = scholars[id][1];
+  $("cut-in-skill").textContent = wardTechniques[id];
   const subject = id >> 1;
   cutIn.style.setProperty("--cut-in-color", subjects[subject].color);
   cutIn.style.setProperty("--cut-in-engraving", subject);
@@ -155,27 +146,47 @@ function advanceScholarCutIn(dt) {
 }
 
 function castScholarUltimate() {
-  const boss = foes.find(e => e.boss);
-  if (modal || cutInRemaining || !boss?.ultimates.length || boss.dying || wardClosed(boss)) return;
-  const [id] = bossStudies[boss.kind][boss.ultimates.shift()];
-  const count = bossStudies[boss.kind].length;
-  const round = studyRound(boss);
-  const upper = round === 0 ? firstWardHP(boss) : Math.floor(boss.max * (count - round) / count);
-  const damage = Math.ceil((upper - studyFloor(boss)) * .64);
+  const boss = foes.find(wardPrimed);
+  if (modal || cutInRemaining || !boss || boss.wardCast) return;
+  const [id] = bossStudies[boss.kind][boss.readyWard];
   const dir = Math.sign(boss.x - player.x) || player.face;
+  boss.wardCast = {id, dir, elapsed:0};
   player.castTime = .42;
-  player.inv = Math.max(player.inv, .85);
   showScholarCutIn(id);
   combatEvent("summon", player.x - dir * 36, player.y - 38, 1.15, {id, flip:dir < 0, ultimate:true});
-  combatEvent("scholarUltimate", boss.x, boss.y, .95, {id, height:boss.height, dir});
   playEffect(skillSounds[id].cast);
-  if (skillSounds[id].onGround) playEffect(skillSounds[id].impact);
-  hitFoe(boss, damage, id, dir);
-  if (!quietCombat()) {
-    shake = Math.max(shake, 8);
-    contactPause = Math.max(contactPause, .16);
-  }
-  refreshScholarUltimate(boss);
-  save();
+  statusBars();
   $("world").focus({preventScroll:true});
+}
+
+const wardImpactTime = .66;
+function advanceWardCast(boss, dt) {
+  const cast = boss.wardCast;
+  if (!cast) return;
+  cast.elapsed += dt;
+  if (cast.elapsed < wardImpactTime) return;
+  const {id, dir} = cast;
+  boss.wardCast = null;
+  boss.openStudy = boss.readyWard;
+  boss.readyWard = null;
+  boss.wardBreak = .65;
+  boss.warn = 0;
+  boss.rush = null;
+  boss.action = 0;
+  boss.bolts.length = 0;
+  bossZones.length = 0;
+  shots = shots.filter(shot => !shot.team);
+  boss.time = 1;
+  player.inv = Math.max(player.inv, 1.1);
+  combatEvent("wardImpact", boss.x, boss.y, 1.12, {id, height:boss.height, half:boss.half, dir});
+  playEffect("phase");
+  if (skillSounds[id].onGround) playEffect(skillSounds[id].impact);
+  hitFoe(boss, Math.ceil((boss.hp - studyFloor(boss)) * .22), id, dir);
+  if (!quietCombat()) {
+    shake = Math.max(shake, 10);
+    contactPause = Math.max(contactPause, .085);
+  }
+  notify("보호막 파괴 · 지금 공격하세요!");
+  statusBars();
+  save();
 }

@@ -182,8 +182,8 @@ kbd {
   border: 1px solid #d6bda8; outline: 1px solid #15121b;
   background: transparent; pointer-events: none;
 }
-#boss-meter::after {
-  content: ""; position: absolute; top: -2px; bottom: -2px; left: 50%; width: 2px;
+#boss-marks i {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
   background: #f7dbc2; box-shadow: 1px 0 #15121b;
 }
 #bossfill {
@@ -426,14 +426,6 @@ kbd {
 .lesson-entry summary { cursor: pointer; min-height: 36px; padding-block: 8px; font-weight: bold; }
 .lesson-entry summary:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .lesson-entry p { margin-block: 3px 9px; line-height: 1.65; word-break: keep-all; }
-#bossfill::after {
-  content: ""; position: absolute; left: 85%; top: -2px; bottom: -2px;
-  border-left: 2px solid #f7dbc2;
-}
-#boss-meter.four-wards::before {
-  content: ""; position: absolute; top: -2px; bottom: -2px; left: 25%; right: 25%;
-  border-inline: 2px solid #f7dbc2; pointer-events: none;
-}
 #overlay[data-kind=dialogue] {
   place-items: end center; padding: 0 max(12px,3vw) max(14px,env(safe-area-inset-bottom));
   background: linear-gradient(0deg,#111a2d96,transparent 48%);
@@ -715,15 +707,20 @@ kbd {
 #leave-study { display: block; min-height: 35px; padding: 5px 4px; text-align: right; text-shadow: inherit; color: #d7e5fa; font-size: 12px; }
 
 #scholar-ultimate {
-  position: absolute; z-index: 2; right: var(--gutter); bottom: 12px; display: flex; gap: 9px;
-  align-items: center; padding: 7px 12px; min-height: 46px;
-  color: #fff1cf; background: #19283fed; border: 1px solid #edc27b; text-align: left;
+  position: absolute; z-index: 2; inset: auto 0 15px; width: max-content; max-width: calc(100% - 24px);
+  margin-inline: auto; display: flex; gap: 12px;
+  align-items: center; padding: 8px 16px; min-height: 50px;
+  color: #fff1cf; background: #1c3047; border: 2px solid #eac184; text-align: left;
+  box-shadow: 0 3px 0 #101728; animation: unfold .18s ease-out;
 }
 #scholar-ultimate small, #scholar-ultimate strong { display: block; }
-#scholar-ultimate small { color: #ffdc9a; font-size: 11px; }
-#scholar-ultimate kbd { min-width: 27px; min-height: 27px; color: #263043; background: #f7d287; font-size: 14px; }
+#scholar-ultimate small { color: #ffdc9a; font-size: 12px; }
+#scholar-ultimate strong { font-size: clamp(15px,2vw,21px); }
+#scholar-ultimate kbd { min-width: 32px; min-height: 32px; color: #263043; background: #f7d287; font-size: 19px; }
 #scholar-ultimate:not(:disabled):hover { background: #314866; }
-#scholar-ultimate:disabled { opacity: .65; }
+@media (max-width: 600px) {
+  #stage:has(#scholar-ultimate:not([hidden])) #toast { bottom: 78px; }
+}
 #scholar-cut-in {
   position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden;
   --cut-in-tilt: clamp(10px,7vw,140px);

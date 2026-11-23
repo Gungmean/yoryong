@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#172c59">
     <title>요룡이의 과학 모험 · 부광고등학교</title>
     <link rel="icon" href="assets/hero.png">
-    <link rel="stylesheet" href="style.css?v=dialogue-busts">
+    <link rel="stylesheet" href="style.css?v=ward-strike">
   </head>
   <body>
     <main id="shell">
@@ -46,6 +46,7 @@
           </div>
           <div class="boss-track" id="boss-meter" role="progressbar" aria-label="보스 체력" aria-valuemin="0" aria-valuemax="100" hidden>
             <span id="bossfill"></span>
+            <span id="boss-marks" aria-hidden="true"></span>
           </div>
           <p id="boss-warning" aria-live="polite"></p>
           <nav class="field-tools" aria-label="모험 정보">
@@ -56,7 +57,7 @@
         </div>
         <div id="toast" role="status"></div>
         <button id="scholar-ultimate" aria-keyshortcuts="F" hidden>
-          <kbd>F</kbd><span><small>학자 필살기</small><strong id="ultimate-name"></strong></span>
+          <kbd>F</kbd><span><small>필살기로 보호막 파괴</small><strong id="ultimate-name"></strong></span>
         </button>
         <div id="scholar-cut-in" aria-hidden="true" hidden>
           <div class="cut-in-shade"></div>
@@ -109,7 +110,7 @@
     <audio id="battle-music" preload="none" loop></audio>
     <script src="data.js?v=biology-cut-in"></script>
     <script src="science-lessons.js?v=biology-cut-in"></script>
-    <script src="study-game.js?v=scholar-banners"></script>
+    <script src="study-game.js?v=ward-strike"></script>
     <script src="assets/world/classrooms.js"></script>
     <script src="icons.js"></script>
     <script src="actor-sheets.js?v=field-pixels"></script>
@@ -118,10 +119,10 @@
     <script src="assets/audio/sfx/bank.js?v=scholar-sounds"></script>
     <script src="sound-effects.js?v=polish"></script>
     <script src="scholar-courses.js?v=biology-cut-in"></script>
-    <script src="quests.js?v=biology-cut-in"></script>
-    <script src="bosses.js?v=slow-ward"></script>
+    <script src="quests.js?v=ward-strike"></script>
+    <script src="bosses.js?v=ward-strike"></script>
     <script src="victory.js?v=polish"></script>
-    <script src="game.js?v=dialogue-busts"></script>
+    <script src="game.js?v=ward-strike"></script>
     <script src="assets/world/atlas.js"></script>
     <script src="assets/world/school-rooms.js"></script>
     <script src="assets/world/fixtures.js"></script>
@@ -130,7 +131,8 @@
     <script src="classroom-experiments.js?v=biology-cut-in"></script>
     <script src="vendor/three-r187.min.js"></script>
     <script src="map3d.js?v=field-pixels"></script>
-    <script src="combat-fx.js?v=scholar-ultimate"></script>
-    <script src="render.js?v=slow-ward"></script>
+    <script src="combat-fx.js?v=ward-strike"></script>
+    <script src="ultimate-fx.js?v=ward-strike"></script>
+    <script src="render.js?v=ward-strike"></script>
   </body>
 </html>

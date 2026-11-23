@@ -1,11 +1,11 @@
 "use strict";
 
 const bossStats = [
-  { height: 153, half: 58, hp: 200, oldHp: 160 },
-  { height: 163, half: 55, hp: 222, oldHp: 178 },
-  { height: 180, half: 67, hp: 248, oldHp: 196 },
-  { height: 158, half: 81, hp: 275, oldHp: 214 },
-  { height: 219, half: 82, hp: 455, oldHp: 345 },
+  { height: 153, half: 58, hp: 560, oldHp: 160 },
+  { height: 163, half: 55, hp: 630, oldHp: 178 },
+  { height: 180, half: 67, hp: 700, oldHp: 196 },
+  { height: 158, half: 81, hp: 760, oldHp: 214 },
+  { height: 219, half: 82, hp: 1260, oldHp: 345 },
 ];
 
 // Projectile heights are measured from the floor. Zones use the same x/width for
@@ -157,7 +157,7 @@ function stepBoss(e, dt) {
   if (Math.abs(dist) > reach + 20 && e.slow <= 0)
     e.x = clamp(e.x + e.dir * (e.kind === 4 ? 42 : 27) * dt, reach, worldWidth - reach);
   if ((e.time -= dt) <= 0) {
-    if (modal === "ward") return;
+    if (modal === "ward" || wardPrimed(e)) return;
     e.plan = planBossMove(e);
     e.dir = e.plan.dir;
     e.warn = e.plan.move.lead;

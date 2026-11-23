@@ -100,7 +100,7 @@ function stairX(type, side) {
 function cameraTarget() {
   if (["classroom", "arena"].includes(scene.type) && W > worldWidth) return (worldWidth - W) / 2;
   const boss = foes.find(e => e.boss);
-  if (boss && (modal === "ward" || (boss.dying && !quietCombat()))) {
+  if (boss && (modal === "ward" || wardPrimed(boss) || (boss.dying && !quietCombat()))) {
     const separation = boss.x - player.x;
     const focus = Math.abs(separation) < W - 75 ? (player.x + boss.x) / 2 + Math.sign(separation) * 17 : boss.x;
     return clamp(focus - W * .5, 0, Math.max(0, worldWidth - W));
@@ -114,6 +114,8 @@ assets.classrooms = new Image();
 assets.classrooms.src = classroomAtlasURL;
 assets.combat = new Image();
 assets.combat.src = "assets/combat/effects.webp";
+assets.ultimate = new Image();
+assets.ultimate.src = "assets/combat/ward-techniques.png";
 assets.summons = new Image();
 assets.summons.src = "assets/actors/summons.png";
 assets.spellFX = new Image();
@@ -230,7 +232,7 @@ function save() {
     const boss = foes.find((e) => e.boss);
     const encounter =
       boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max,
-        openStudy: boss.openStudy, ultimates: boss.ultimates } : null;
+        openStudy: boss.openStudy, readyWard: boss.readyWard } : null;
     const next = JSON.stringify({
       generation: runGeneration, progress, scene, x: player.x, hp, mp,
       sound, musicEnabled, musicVolume, effectsVolume, reducedCombat, sceneryPaused, encounter,
@@ -346,14 +348,18 @@ function statusBars() {
   refreshScholarUltimate(b);
   const meter = $("boss-meter");
   meter.hidden = !b || b.dying > 0;
-  const warning = !b || b.dying ? "" : b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint
+  const warning = !b || b.dying ? "" : wardPrimed(b) ? "정답 · 필살기로 보호막을 깨세요"
+    : b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint
     : wardClosed(b) ? (b.studyRetry > 0 ? "보호막 유지 · 다음 기회까지 회피하세요" : "보호막 분석 중")
     : b.openStudy == null ? "공격해서 보호막을 드러내세요" : "보호막 해제 · 공격 가능";
   if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
   if (b) {
     const health = (100 * b.hp) / b.max;
     const percent = Math.ceil(health);
-    meter.classList.toggle("four-wards", bossStudies[b.kind].length === 4);
+    if (meter.dataset.boss !== String(b.kind)) {
+      meter.dataset.boss = b.kind;
+      $("boss-marks").innerHTML = wardThresholds(b.kind).map(mark => `<i style="left:${mark}%"></i>`).join("");
+    }
     meter.style.setProperty("--boss-health", health + "%");
     meter.setAttribute("aria-label", subjects[b.kind].boss + " 체력");
     meter.setAttribute("aria-valuenow", String(percent));
@@ -959,7 +965,7 @@ function enemy(x, kind, boss = false) {
     slow: 0,
     home: x,
     dir: -1,
-    ultimates: [],
+    readyWard: null,
     studyRetry: 0,
   };
 }
@@ -1108,7 +1114,7 @@ function enterBattle(i,entryX=190) {
   if (i === 4 && progress.won) return;
   const layers = bossStudies[i].length;
   dialogue("요룡이", "hero", subjects[i].intro + "<br>보호막이 " + layers +
-    "겹이야. 먼저 공격해서 보호막을 드러내자. 16초 안에 관측 문제를 맞히면 학자의 필살기를 한 번 쓸 수 있어!", "전투 시작");
+    "겹이야. 기본 공격과 스킬로 체력 눈금까지 깎자. 문제를 맞힌 뒤 F나 필살기 버튼으로 보호막을 깨야 해!", "전투 시작");
 }
 function winBoss(i) {
   playEffect("bossVictory");
@@ -1351,15 +1357,17 @@ function cast(slot) {
 function step(dt) {
   advanceScholarCutIn(dt);
   if (modal && modal !== "ward") return;
+  const primed = foes.find(wardPrimed);
+  if (primed) advanceWardCast(primed, dt);
   if (modal === "ward") updateWardTimer(dt);
   else {
     const ward = foes.find(wardClosed);
-    if (ward) {
+    if (ward && !wardPrimed(ward)) {
       ward.studyRetry = Math.max(0, ward.studyRetry - dt);
       if (!ward.studyRetry && !cutInRemaining) challengeWard(ward);
     }
   }
-  const reading = modal === "ward";
+  const reading = modal === "ward" || Boolean(primed && wardPrimed(primed));
   const realDt = dt;
   dt *= advanceBattleRate(dt, reading);
   if (contactPause > 0) {
@@ -1788,10 +1796,8 @@ if (resumeFoe) {
     const savedMax = resumeFoe.max > 0 ? resumeFoe.max : bossStats[boss.kind].oldHp;
     boss.hp = savedMax === boss.max ? clamp(resumeFoe.hp, 0, boss.max) : clamp(resumeFoe.hp / savedMax, 0, 1) * boss.max;
     const open = resumeFoe.openStudy;
-    if (Number.isInteger(open) && open >= 0 && open <= studyRound(boss)) boss.openStudy = open;
-    if (Array.isArray(resumeFoe.ultimates))
-      boss.ultimates = [...new Set(resumeFoe.ultimates)]
-        .filter(round => Number.isInteger(round) && round >= 0 && round <= boss.openStudy).sort((a, b) => a - b);
+    if (Number.isInteger(open) && open >= 0 && open < bossStudies[boss.kind].length) boss.openStudy = open;
+    if (resumeFoe.readyWard === nextWard(boss) && wardClosed(boss)) boss.readyWard = resumeFoe.readyWard;
     boss.x = clamp(resumeFoe.x, boss.half, worldWidth - boss.half);
     if (!boss.hp) beginBossClear(boss);
   }

@@ -100,7 +100,7 @@ function stairX(type, side) {
 function cameraTarget() {
   if (["classroom", "arena"].includes(scene.type) && W > worldWidth) return (worldWidth - W) / 2;
   const boss = foes.find(e => e.boss);
-  if (boss?.dying && !quietCombat()) {
+  if (boss && (modal === "ward" || (boss.dying && !quietCombat()))) {
     const separation = boss.x - player.x;
     const focus = Math.abs(separation) < W - 75 ? (player.x + boss.x) / 2 + Math.sign(separation) * 17 : boss.x;
     return clamp(focus - W * .5, 0, Math.max(0, worldWidth - W));
@@ -157,10 +157,10 @@ function floorName() {
 }
 const hasKey = (i) =>
   progress.learned.includes(i * 2) && progress.learned.includes(i * 2 + 1);
-function notify(msg) {
+function notify(msg, duration = 2600) {
   $("toast").textContent = msg;
   $("toast").classList.add("on");
-  toastUntil = performance.now() + 2600;
+  toastUntil = performance.now() + duration;
 }
 const musicTracks = { campus: $("campus-music"), battle: $("battle-music") };
 let musicEnabled = true, musicUnlocked = false;
@@ -345,7 +345,7 @@ function statusBars() {
   const meter = $("boss-meter");
   meter.hidden = !b || b.dying > 0;
   const warning = !b || b.dying ? "" : b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint
-    : wardClosed(b) ? "보호막 분석 중" : "보호막 해제 · 공격 가능";
+    : wardClosed(b) ? "보호막 분석 중" : b.openStudy == null ? "공격해서 보호막을 드러내세요" : "보호막 해제 · 공격 가능";
   if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
   if (b) {
     const health = (100 * b.hp) / b.max;
@@ -1009,6 +1009,7 @@ function classroomPanels() {
 const classroomArtRow = () => Math.max(0, scene.floor - 3);
 function setScene() {
   contactPause = 0;
+  battleRate = 1;
   worldWidth = mapWidths[scene.type];
   beginCourse();
   player.x = clamp(player.x, 20, worldWidth - 20);
@@ -1085,7 +1086,7 @@ function enterBattle(i,entryX=190) {
   if (i === 4 && progress.won) return;
   const layers = bossStudies[i].length;
   dialogue("요룡이", "hero", subjects[i].intro + "<br>보호막이 " + layers +
-    "겹이야. 관측 문제를 풀면 다음 체력 눈금까지 공격할 수 있어. 모르면 학자의 노트를 펼쳐 보자.", "첫 보호막 조사");
+    "겹이야. 먼저 공격해서 보호막을 드러내자. 시간이 느려지면 관측 문제를 풀어 다음 공격 기회를 열 수 있어.", "전투 시작");
 }
 function winBoss(i) {
   playEffect("bossVictory");
@@ -1326,9 +1327,14 @@ function cast(slot) {
   statusBars();
 }
 function step(dt) {
-  if (modal) return;
-  const ward = foes.find(wardClosed);
-  if (ward) { challengeWard(ward); return; }
+  if (modal && modal !== "ward") return;
+  if (!modal) {
+    const ward = foes.find(wardClosed);
+    if (ward) challengeWard(ward);
+  }
+  const reading = modal === "ward";
+  const realDt = dt;
+  dt *= advanceBattleRate(dt, reading);
   if (contactPause > 0) {
     contactPause = Math.max(0, contactPause - dt);
     return;
@@ -1351,9 +1357,9 @@ function step(dt) {
     "recover",
   ])
     p[k] = Math.max(0, p[k] - dt);
-  cool = cool.map((n) => Math.max(0, n - dt));
+  if (!reading) cool = cool.map((n) => Math.max(0, n - dt));
   shake = Math.max(0, shake - dt * 12);
-  mp = Math.min(60, mp + dt * 2.5);
+  if (!reading) mp = Math.min(60, mp + dt * 2.5);
   let axis = Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
   if (axis && p.dash <= 0) p.face = axis;
   const oldX = p.x;
@@ -1410,10 +1416,10 @@ function step(dt) {
     }
   } else if (!p.grounded) p.stepDistance = 0;
   if (keys.has("KeyA") || attackPointer !== null) attack();
-  if (modal) return;
+  if (modal && !reading) return;
   cameraFollowX +=
     (cameraTarget() - cameraFollowX) *
-    (1 - Math.exp(-dt * 7));
+    (1 - Math.exp(-(reading ? realDt : dt) * 7));
   cam = Math.round(cameraFollowX);
   for (let e of [...foes]) {
     if (e.dying) {
@@ -1434,12 +1440,12 @@ function step(dt) {
     e.slow = Math.max(0, e.slow - dt);
     if (e.boss) stepBoss(e, dt);
     else stepHallFoe(e, dt);
-    e.moving = Math.abs(previousX - e.x) > 0.04;
+    e.moving = Math.abs(previousX - e.x) > dt * 2.4;
     if (e.boss && !e.rush && Math.abs(e.x - p.x) < 23 && p.y > GROUND - 31) hurt(8);
   }
-  if (modal) return;
+  if (modal && !reading) return;
   stepBossZones(dt);
-  if (modal) return;
+  if (modal && !reading) return;
   for (let s of [...shots]) {
     s.life -= dt;
     s.age = (s.age || 0) + dt;
@@ -1494,7 +1500,7 @@ function step(dt) {
         s.life = 0;
       }
     }
-    if (modal) break;
+    if (modal && !reading) break;
   }
   shots = shots.filter((s) => s.life > 0);
   for (let e of effects) {

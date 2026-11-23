@@ -832,7 +832,8 @@ let last = 0,
 function tick(ms) {
   const elapsed = last ? Math.min((ms - last) / 1000, 0.08) : 0;
   last = ms;
-  if (!modal && !document.hidden && !sceneryPaused && !reducedMotion.matches) sceneryTime += elapsed;
+  if ((!modal || modal === "ward") && !document.hidden && !sceneryPaused && !reducedMotion.matches)
+    sceneryTime += elapsed * battleRate;
   acc += elapsed;
   while (acc >= 1 / 60) {
     if (!sceneTransition || sceneTransition.arrived !== null || reducedMotion.matches) step(1 / 60);

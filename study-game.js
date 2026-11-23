@@ -9,11 +9,11 @@ function studyQuestion({ title, art, question, lessonId, ward = false }, onCorre
   const choices = question.choices.map((choice, i) =>
     `<button class="opt" data-answer="${i}"><kbd>${i+1}</kbd>${choice}</button>`).join("");
   const extra = lessonId == null ? "" : lessonEntry(lessonId);
+  const prompt = `<p class="quiz-question">${question.prompt}</p>`;
+  const lead = ward ? prompt : `<div class="conversation"><img class="portrait" src="${portraitPath(art)}" alt=""><div>${prompt}</div></div>`;
   show(ward ? "ward" : "quiz", title,
-    `<div class="conversation"><img class="portrait" src="${portraitPath(art)}" alt="">
-      <div><p class="quiz-question">${question.prompt}</p></div></div>${choices}
-      <p class="quiz-note" role="status"></p>${extra}
-      ${ward ? '<button class="leave-study" id="leave-study">전투를 끝내고 복도로</button>' : ""}`, !ward);
+    `${lead}${ward ? '<div class="ward-choices">' + choices + '</div>' : choices}<p class="quiz-note" role="status"></p>${extra}
+      ${ward ? '<button class="leave-study" id="leave-study">복도로 돌아가기</button>' : ""}`, !ward);
   $("panel").querySelectorAll("[data-answer]").forEach(button => {
     button.onclick = () => {
       const index = Number(button.dataset.answer);
@@ -41,12 +41,26 @@ function studyRound(boss) {
 }
 
 function studyFloor(boss) {
+  if (boss.hp > firstWardHP(boss) && boss.openStudy !== 0) return firstWardHP(boss);
   const count = bossStudies[boss.kind].length;
   return Math.floor(boss.max * (count - studyRound(boss) - 1) / count);
 }
 
+function firstWardHP(boss) {
+  return Math.floor(boss.max * .85);
+}
+
 function wardClosed(boss) {
-  return boss.boss && boss.hp > 0 && boss.openStudy !== studyRound(boss);
+  return boss.boss && boss.hp > 0 && boss.hp <= firstWardHP(boss) && boss.openStudy !== studyRound(boss);
+}
+
+// Rates follow real time so lingering over a choice never stalls the recovery ramp.
+let battleRate = 1;
+function advanceBattleRate(dt, reading) {
+  const target = reading ? .07 : 1;
+  battleRate += (target - battleRate) * (1 - Math.exp(-dt * (reading ? 16 : 6)));
+  if (Math.abs(target - battleRate) < .001) battleRate = target;
+  return battleRate;
 }
 
 function challengeWard(boss) {
@@ -54,24 +68,15 @@ function challengeWard(boss) {
   const stages = bossStudies[boss.kind];
   const [id, question] = stages[round];
   const title = subjects[boss.kind].boss + " · 보호막 " + (round + 1) + "/" + stages.length;
-  // Every new band begins at a clean attack boundary. Never resume a warning
-  // or a projectile that the player saw before reading the question.
-  shots.length = 0;
-  bossZones.length = 0;
-  boss.bolts.length = 0;
-  boss.rush = boss.plan = null;
-  boss.warn = boss.action = 0;
-  boss.time = 1.8;
+  contactPause = 0;
   studyQuestion({ title, art: "foe" + boss.kind, question, lessonId: id, ward: true }, () => {
     boss.openStudy = round;
     player.inv = Math.max(player.inv, 1.2);
+    closePanel();
+    boss.wardBreak = .65;
+    playEffect("phase");
+    notify("보호막 해제 · " + question.why, 6500);
+    statusBars();
     save();
-    dialogue(scholars[id][0], "scholar" + id, question.why +
-      (round === stages.length - 1 ? "<br>마지막 보호막이 깨졌어. 이제 마무리할 수 있어!" : "<br>보호막이 깨졌어. 다음 체력 눈금까지 공격할 수 있어!"),
-      "공격하러 가기", () => {
-        boss.wardBreak = .65;
-        playEffect("phase");
-        statusBars();
-      });
   });
 }

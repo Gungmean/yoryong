@@ -157,6 +157,7 @@ function stepBoss(e, dt) {
   if (Math.abs(dist) > reach + 20 && e.slow <= 0)
     e.x = clamp(e.x + e.dir * (e.kind === 4 ? 42 : 27) * dt, reach, worldWidth - reach);
   if ((e.time -= dt) <= 0) {
+    if (modal === "ward") return;
     e.plan = planBossMove(e);
     e.dir = e.plan.dir;
     e.warn = e.plan.move.lead;
@@ -179,7 +180,7 @@ function stepBossZones(dt) {
     if (!zone.hit && !player.inv && Math.abs(player.x - zone.x) < zone.radius && player.y > GROUND - zone.height) {
       zone.hit = true;
       hurt(zone.dmg);
-      if (modal) return;
+      if (modal && modal !== "ward") return;
     }
   }
 }

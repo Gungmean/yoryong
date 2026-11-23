@@ -427,6 +427,10 @@ kbd {
 .lesson-entry summary:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .lesson-entry p { margin-block: 3px 9px; line-height: 1.65; word-break: keep-all; }
 .leave-study { grid-column: 1 / -1; justify-self: start; min-height: 40px; color: var(--print); text-decoration: underline; }
+#bossfill::after {
+  content: ""; position: absolute; left: 85%; top: -2px; bottom: -2px;
+  border-left: 2px solid #f7dbc2;
+}
 #boss-meter.four-wards::before {
   content: ""; position: absolute; top: -2px; bottom: -2px; left: 25%; right: 25%;
   border-inline: 2px solid #f7dbc2; pointer-events: none;
@@ -604,4 +608,41 @@ kbd {
 @media (pointer: coarse) and (min-width: 660px) and (max-height: 550px) {
   .dock { grid-template-columns: auto minmax(91px,1fr) auto auto auto; grid-template-areas: "move vitals slots actions controls"; }
   .controls { grid-area: controls; }
+}
+
+/* The observation sits in the sky above the fighters. Long notes scroll within it. */
+#overlay[data-kind=ward] {
+  place-items: start center; padding: clamp(20px,7vh,68px) max(12px,env(safe-area-inset-right)) 0;
+  background: linear-gradient(to bottom, #1320358a, transparent 56%);
+}
+#shell:has(#overlay[data-kind=ward]:not([hidden])) :is(.map-window,.field-tools,#boss-warning,#toast) { visibility: hidden; }
+#overlay[data-kind=ward] #panel {
+  width: min(760px,100%); max-height: 56vh; max-height: 56dvh;
+  border: none; border-top: 2px solid #d6b479; background: #15243bf2; color: #fff4d8;
+  box-shadow: 0 3px 12px #080c1250; scrollbar-color: #8697aa #23354b;
+}
+[data-kind=ward] .panel-head { min-height: 0; padding: 9px 16px 0; background: transparent; border: 0; }
+[data-kind=ward] .panel-head::before { content: none; }
+[data-kind=ward] .panel-head > i { width: 18px; height: 18px; }
+[data-kind=ward] .book-title h2 { font-size: 13px; color: #f1cf87; background: none; }
+#overlay[data-kind=ward] .panel-body { display: block; padding: 8px 16px 9px; background: none; }
+[data-kind=ward] .ward-choices { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; margin-top: 10px; }
+[data-kind=ward] .ward-choices .opt {
+  grid-column: auto; gap: 8px; min-height: 44px; padding: 8px;
+  color: #fff4dc; background: #2c4059; border: 1px solid #68788b;
+}
+[data-kind=ward] .ward-choices .opt:is(:hover,:focus-visible) { background: #3a506b; outline-color: #f7cc7e; }
+[data-kind=ward] .ward-choices .opt kbd { color: #f4d89d; border-color: #8b9bad; }
+[data-kind=ward] .ward-choices .opt.reconsider kbd { color: #ffb7ad; }
+[data-kind=ward] .quiz-note:not(:empty) { color: #ffcec0; margin-top: 8px; }
+[data-kind=ward] .lesson-entry { margin: 4px 0 0; }
+[data-kind=ward] .lesson-entry summary, [data-kind=ward] .leave-study { color: #cedceb; font-size: 12px; }
+[data-kind=ward] .leave-study { min-height: 32px; padding-inline: 4px; }
+@media (max-width: 580px) {
+  [data-kind=ward] .ward-choices { grid-template-columns: 1fr; }
+}
+@media (orientation: landscape) and (max-height: 530px) {
+  #overlay[data-kind=ward] { padding-top: 14px; }
+  #overlay[data-kind=ward] #panel { max-height: 58dvh; }
+  [data-kind=ward] .panel-body .quiz-question { font-size: 15px; }
 }

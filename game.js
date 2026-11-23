@@ -229,7 +229,8 @@ function save() {
     if (parseSave(previous)?.generation > runGeneration) return;
     const boss = foes.find((e) => e.boss);
     const encounter =
-      boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max, openStudy: boss.openStudy } : null;
+      boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max,
+        openStudy: boss.openStudy, ultimates: boss.ultimates } : null;
     const next = JSON.stringify({
       generation: runGeneration, progress, scene, x: player.x, hp, mp,
       sound, musicEnabled, musicVolume, effectsVolume, reducedCombat, sceneryPaused, encounter,
@@ -342,10 +343,12 @@ function statusBars() {
     $(id + "val").textContent = Math.ceil(n) + "/" + max;
   }
   const b = foes.find((e) => e.boss);
+  refreshScholarUltimate(b);
   const meter = $("boss-meter");
   meter.hidden = !b || b.dying > 0;
   const warning = !b || b.dying ? "" : b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint
-    : wardClosed(b) ? "보호막 분석 중" : b.openStudy == null ? "공격해서 보호막을 드러내세요" : "보호막 해제 · 공격 가능";
+    : wardClosed(b) ? (b.studyRetry > 0 ? "보호막 유지 · 다음 기회까지 회피하세요" : "보호막 분석 중")
+    : b.openStudy == null ? "공격해서 보호막을 드러내세요" : "보호막 해제 · 공격 가능";
   if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
   if (b) {
     const health = (100 * b.hp) / b.max;
@@ -361,25 +364,29 @@ function statusBars() {
     el.textContent = cd > 0 ? cd.toFixed(1) : "";
   });
 }
-function show(kind, title, body, canClose = true) {
-  if (["menu", "map", "equip", "quest", "help", "seal"].includes(kind)) playEffect("select");
+function beginPanel(kind, host) {
   if (!modal) {
     returnFocus = document.activeElement?.closest("#shell button") || $("world");
-    for (const child of $("shell").children) child.inert = child !== $("overlay");
+    for (const child of $("shell").children) child.inert = child !== host;
   }
   if (modal !== kind) panelBack = null;
   modal = kind;
   panelSince = performance.now();
-  $("overlay").dataset.kind = kind;
   keys.clear();
   clearAttackPointer();
   document.querySelectorAll(".held").forEach(button => button.classList.remove("held"));
   player.vx = 0;
   player.buffer = 0;
+}
+function show(kind, title, body, canClose = true) {
+  if (["menu", "map", "equip", "quest", "help", "seal"].includes(kind)) playEffect("select");
+  const overlay = $("overlay");
+  beginPanel(kind, overlay);
+  overlay.dataset.kind = kind;
   $("overlay").hidden = false;
   const marks = { menu: "globe", map: "zelkova", equip: "slots", quest: "quest",
     lab: "flask", down: "rose", ending: "globe", seal: "globe",
-    dialogue: "quest", quiz: "atom", ward: "atom", help: "map", reset: "globe" };
+    dialogue: "quest", quiz: "atom", help: "map", reset: "globe" };
   $("panel").innerHTML = `<div class="panel-head"><i data-icon="${marks[kind]}"></i>
     <div class="book-title"><h2 id="paneltitle">${title}</h2>
     ${kind === "menu" ? '<p>부광고등학교 <span>창의(創意)</span></p>' : ''}</div>
@@ -401,6 +408,8 @@ function closePanel() {
   modal = "";
   panelBack = null;
   $("overlay").hidden = true;
+  $("ward-question").hidden = true;
+  wardAttempt = null;
   for (const child of $("shell").children) child.inert = false;
   (returnFocus?.isConnected ? returnFocus : $("world")).focus({ preventScroll: true });
   returnFocus = null;
@@ -682,6 +691,7 @@ function showHelp() {
     ["← →", "누르고 있는 동안 좌우로 이동"], ["점프", "공중에서 한 번 더 눌러 더블 점프"],
     ["↓ + 점프", "책상이나 발판 아래로 내려오기"], ["회피", "바라보는 방향으로 회피 대시"],
     ["A", "기본 공격 · 누르고 있으면 연속 공격"], ["Q W E R", "스킬 사용 · 빈 슬롯을 누르면 스킬 배치"],
+    ["학자 필살기", "보스 문제를 맞히면 생기는 필살기 버튼을 눌러 사용"],
     ["↑", "대화 · 입장 · 계단 한 층 올라가기"], ["↓", "계단 한 층 내려가기"], ["메뉴", "지도 · 스킬 배치 · 모험 일지"],
   ];
   const keyboardHelp = [
@@ -689,7 +699,7 @@ function showHelp() {
     ["↓ + Alt", "발판 내려오기"], ["Shift", "회피 대시"],
     ["A", "기본 공격"], ["Q W E R", "장착한 스킬 사용"], ["K", "스킬 배치"],
     ["↑", "대화 · 입장 · 계단 한 층 올라가기"], ["↓", "계단에서 한 층 내려가기"],
-    ["숫자", "문제 답 고르기"], ["M", "캠퍼스 지도"], ["J", "모험 일지"], ["Esc", "메뉴 · 닫기"]
+    ["숫자", "문제 답 고르기"], ["F", "보스 문제를 맞혀 얻은 학자 필살기"], ["M", "캠퍼스 지도"], ["J", "모험 일지"], ["Esc", "메뉴 · 닫기"]
   ];
   show("help", "조작 안내", (coarseInput.matches ? touchHelp : keyboardHelp)
     .map(([key, action]) => `<div class="help-row"><kbd>${key}</kbd><span>${action}</span></div>`).join("") +
@@ -947,6 +957,8 @@ function enemy(x, kind, boss = false) {
     slow: 0,
     home: x,
     dir: -1,
+    ultimates: [],
+    studyRetry: 0,
   };
 }
 function stepHallFoe(e, dt) {
@@ -1086,7 +1098,7 @@ function enterBattle(i,entryX=190) {
   if (i === 4 && progress.won) return;
   const layers = bossStudies[i].length;
   dialogue("요룡이", "hero", subjects[i].intro + "<br>보호막이 " + layers +
-    "겹이야. 먼저 공격해서 보호막을 드러내자. 시간이 느려지면 관측 문제를 풀어 다음 공격 기회를 열 수 있어.", "전투 시작");
+    "겹이야. 먼저 공격해서 보호막을 드러내자. 16초 안에 관측 문제를 맞히면 학자의 필살기를 한 번 쓸 수 있어!", "전투 시작");
 }
 function winBoss(i) {
   playEffect("bossVictory");
@@ -1174,7 +1186,7 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
   }
 }
 function hurt(n) {
-  if (player.inv > 0 || modal || foes.some(wardClosed)) return;
+  if (player.inv > 0 || modal || foes.some(e => wardClosed(e) && !e.studyRetry)) return;
   hp = Math.max(0, hp - n);
   player.inv = 0.95;
   player.hurtTime = 0.26;
@@ -1328,9 +1340,13 @@ function cast(slot) {
 }
 function step(dt) {
   if (modal && modal !== "ward") return;
-  if (!modal) {
+  if (modal === "ward") updateWardTimer(dt);
+  else {
     const ward = foes.find(wardClosed);
-    if (ward) challengeWard(ward);
+    if (ward) {
+      ward.studyRetry = Math.max(0, ward.studyRetry - dt);
+      if (!ward.studyRetry) challengeWard(ward);
+    }
   }
   const reading = modal === "ward";
   const realDt = dt;
@@ -1554,6 +1570,7 @@ function press(code, repeat = false) {
     }
   }
   if (code === "KeyA") attack();
+  if (code === "KeyF") castScholarUltimate();
   if (["KeyQ", "KeyW", "KeyE", "KeyR"].includes(code))
     cast(slotKeys.indexOf(code.slice(-1)));
   if (code === "ArrowUp" || code === "Enter") interact();
@@ -1572,6 +1589,7 @@ const gameKeys = new Set([
   "ShiftRight",
   "ShiftLeft",
   "KeyA",
+  "KeyF",
   "KeyQ",
   "KeyW",
   "KeyE",
@@ -1590,7 +1608,8 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (modal && e.key === "Tab") {
-    const buttons = $("panel").querySelectorAll("button:not(:disabled), input:not(:disabled), summary");
+    const host = $(modal === "ward" ? "ward-question" : "panel");
+    const buttons = host.querySelectorAll("button:not(:disabled), input:not(:disabled), summary");
     const first = buttons[0], last = buttons[buttons.length - 1];
     if ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
       e.preventDefault();
@@ -1601,7 +1620,8 @@ window.addEventListener("keydown", (e) => {
   const digit = /^(?:Digit|Numpad)([0-6])$/.exec(e.code);
   if (digit && (modal === "quiz" || modal === "ward")) {
     if (!e.repeat) {
-      $("panel").querySelector('[data-answer="' + (Number(digit[1]) - 1) + '"]')?.click();
+      $(modal === "ward" ? "ward-question" : "panel")
+        .querySelector('[data-answer="' + (Number(digit[1]) - 1) + '"]:not(:disabled)')?.click();
     }
     e.preventDefault();
     return;
@@ -1631,6 +1651,11 @@ window.addEventListener("blur", () => {
   save();
 });
 window.addEventListener("pagehide", save);
+$("leave-study").onclick = () => {
+  closePanel();
+  travelStair(sideStairs[scene.type][0], -1);
+};
+$("scholar-ultimate").onclick = castScholarUltimate;
 window.addEventListener("storage", (event) => {
   if (event.key === SAVE && parseSave(event.newValue)?.generation > runGeneration) location.reload();
 });
@@ -1751,9 +1776,14 @@ if (resumeFoe) {
   if (boss && Number.isFinite(resumeFoe.hp) && Number.isFinite(resumeFoe.x)) {
     const savedMax = resumeFoe.max > 0 ? resumeFoe.max : bossStats[boss.kind].oldHp;
     boss.hp = savedMax === boss.max ? clamp(resumeFoe.hp, 0, boss.max) : clamp(resumeFoe.hp / savedMax, 0, 1) * boss.max;
-    if (resumeFoe.openStudy === studyRound(boss)) boss.openStudy = resumeFoe.openStudy;
+    const open = resumeFoe.openStudy;
+    if (Number.isInteger(open) && open >= 0 && open <= studyRound(boss)) boss.openStudy = open;
+    if (Array.isArray(resumeFoe.ultimates))
+      boss.ultimates = [...new Set(resumeFoe.ultimates)]
+        .filter(round => Number.isInteger(round) && round >= 0 && round <= boss.openStudy).sort((a, b) => a - b);
     boss.x = clamp(resumeFoe.x, boss.half, worldWidth - boss.half);
     if (!boss.hp) beginBossClear(boss);
   }
   resumeFoe = null;
 }
+statusBars();

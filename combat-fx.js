@@ -26,6 +26,7 @@ const scholarHits = [
 const bossHits = ["field", "flask", "thicket", "meteor"];
 const bossWakes = ["orbit", "bubbles", "vine", "ember"];
 const scholarWakes = ["apple", "orbit", "bubbles", "prism", "vine", "wings"];
+const scholarFinales = ["gravity", "space", "restore", "prism", "roots", "wings", "fault", "core"];
 
 // The atlas keeps the pivot of each simulation. A narrow particle cell can have its pivot outside the cell.
 function spellClip(name, t, x, y, scale = 1, alpha = 1, flip = false) {
@@ -442,7 +443,7 @@ function drawCombatGround() {
       const pose = Math.min(3, Math.floor(t * 4));
       if (assets.summons.naturalWidth) {
         drawFieldCell(assets.summons, pose*108, e.id*108, 108, 108, 54, 104,
-          x, feet, 1, 1, e.flip);
+          x, feet, e.ultimate ? 1.35 : 1, e.ultimate ? 1.35 : 1, e.flip);
       } else drawActor("scholar" + e.id, 4 + pose, x, feet, 74, e.flip);
       g.restore();
       if (!quietCombat() && t < .74) {
@@ -542,6 +543,25 @@ function drawCombatAccent(e) {
     const reach = 69 + 22 * Math.sin(Math.PI * t);
     spellClip("talons", t, x + e.dir * 33, y - 6, 1.08, fade, e.dir < 0);
     combatSprite(FX_CLAW, frame, x + e.dir * reach, y - 3, 1, e.dir < 0, fade);
+  } else if (e.type === "scholarUltimate") {
+    const soft = quietCombat();
+    const material = scholarFinales[e.id], color = spellLight[e.id];
+    const groundSpell = e.id === 4 || e.id >= 6;
+    const center = y - (groundSpell ? 6 : e.height * .48);
+    const spread = (1 - (1 - t) ** 3) * (soft ? 70 : 150);
+    spellClip(material, t, x, center, soft ? 1.45 : 2.25, fade, e.dir < 0);
+    g.save();
+    g.globalAlpha *= fade * .8;
+    fxArc(x, y - 3, 24 + spread, 5 + spread * .08, color, 0, Math.PI * 2, 3);
+    if (!soft) {
+      splinters(x, center, t, 147, color, 20);
+      for (const side of [-1, 1]) {
+        const rise = groundSpell ? 2 : 30;
+        combatSprite(e.id, frame, x + side * (25 + spread * .68), center - rise * t,
+          1.04 - t * .38, side < 0, fade);
+      }
+    }
+    g.restore();
   } else if (e.type === "impact" || e.type === "hurt" || e.type === "enemyImpact") {
     const hurt = e.type === "hurt",
       enemy = e.type === "enemyImpact";

@@ -132,17 +132,33 @@ function innerCore(x, y, p, alpha, scale) {
 const techniquePoses = [fallingApples, stoppedClock, goldenBalance, amethystLattice,
   risingSeed, goldenWings, plateCollision, innerCore];
 
-// The animated atlas goes behind the fighters. The signature silhouettes and
-// broken ward pieces render in front at the same impact beat.
+// [atlas clip, delay, duration, x offset, y offset, scale, mirrored].
+// Each follow-through has its own rhythm and stays behind the fighters.
 const techniqueBursts = [
-  [["meteor",0,0,1.35], ["gravity",0,-70,2.2]],
-  [["space",-84,-85,1.65,true], ["space",84,-85,1.65], ["orbitSeal",0,-3,2.25]],
-  [["restore",-113,-5,2.1], ["restore",113,-5,2.1], ["reactionSeal",0,-2,2.6]],
-  [["prism",-45,-62,1.5], ["prism",45,-62,1.5,true], ["reactionSeal",0,0,2.2]],
-  [["roots",0,0,2.8], ["thicket",44,0,1.43,true], ["thicket",-44,0,1.43]],
-  [["wings",-78,-95,1.5,true], ["wings",78,-95,1.5], ["livingSeal",0,-3,2.5]],
-  [["fault",-55,0,1.24], ["fault",55,0,1.24,true], ["quake",0,0,1.52]],
-  [["core",0,-4,1.82], ["quake",-130,-2,1.24,true], ["quake",130,-2,1.24]],
+  [["meteor",0,.74,0,0,1.46], ["gravity",0,.51,0,-73,2.2],
+    ["meteor",.21,.65,-132,0,1.01,true], ["meteor",.32,.65,139,0,.97],
+    ["victoryEarth",.44,.82,0,0,1.43]],
+  [["space",0,.65,-84,-85,1.72,true], ["space",0,.65,84,-85,1.72],
+    ["orbitSeal",.14,.71,0,-3,2.65], ["space",.34,.54,-169,-105,1.06,true],
+    ["space",.47,.62,169,-105,1.06], ["victoryPhysics",.37,.93,0,0,1.58]],
+  [["restore",0,.72,-113,-5,2.26], ["restore",0,.72,113,-5,2.26],
+    ["reactionSeal",.18,.86,0,-2,2.80], ["restore",.32,.76,-196,-6,1.41,true],
+    ["restore",.32,.76,196,-6,1.41], ["victoryChemistry",.40,.83,0,0,1.30]],
+  [["prism",0,.58,-45,-62,1.60], ["prism",0,.58,45,-62,1.60,true],
+    ["reactionSeal",.1,.82,0,0,2.28], ["prism",.31,.65,-128,-40,1.32,true],
+    ["prism",.39,.65,128,-47,1.32], ["victoryChemistry",.49,.84,0,0,1.34]],
+  [["roots",0,.83,0,0,3.10], ["thicket",.10,.67,45,0,1.44,true],
+    ["thicket",.10,.67,-45,0,1.44], ["thicket",.36,.78,-176,0,1.26],
+    ["thicket",.40,.78,176,0,1.26,true], ["victoryBiology",.38,.92,0,0,1.66]],
+  [["wings",0,.77,-78,-95,1.55,true], ["wings",0,.77,78,-95,1.55],
+    ["livingSeal",.13,.73,0,-3,2.50], ["wings",.36,.75,-168,-80,1.13,true],
+    ["wings",.36,.75,168,-80,1.13], ["wings",.50,.78,0,-143,1.44]],
+  [["fault",0,.67,-55,0,1.24], ["fault",0,.67,55,0,1.24,true],
+    ["quake",.14,.74,0,0,1.56], ["fault",.31,.72,-179,0,.93,true],
+    ["fault",.31,.72,179,0,.93], ["victoryEarth",.43,.88,0,0,1.58]],
+  [["core",0,.74,0,-4,1.87], ["quake",.13,.71,-130,-2,1.24,true],
+    ["quake",.13,.71,130,-2,1.24], ["core",.40,.68,0,-4,2.03],
+    ["quake",.56,.78,-228,0,1.23,true], ["quake",.56,.78,228,0,1.23]],
 ];
 const techniqueSeals = ["orbitSeal", "reactionSeal", "livingSeal", "strataSeal"];
 
@@ -153,6 +169,8 @@ function wardConvergence(x, foot, height, p, id) {
   g.save();
   g.globalAlpha *= Math.min(.88, p * 1.3);
   spellClip(techniqueSeals[id >> 1], .29 + .39 * p, x, foot - 3, 1.65 + .42 * p, .85);
+  const sweep = 1 - (1 - p) ** 2;
+  fxArc(x, foot - 4, 89 + sweep * 155, 10 + sweep * 20, tip, p * 3, p * 3 + Math.PI * 1.28, 2);
   fxArc(x, foot - 3, radius * 1.1, 14 + p * 5, edge, 0, Math.PI * 2, 5);
   fxArc(x, foot - 3, radius * 1.1, 14 + p * 5, color, 0, Math.PI * 2, 2);
   for (let i = 0; i < 20; i++) {
@@ -182,11 +200,49 @@ function drawWardTechniqueBack() {
     return;
   }
   const x = fx.x - cam, floor = fx.y;
-  for (const [clip, dx, dy, size, flip] of techniqueBursts[fx.id]) {
-    spellClip(clip, stage * 1.17, x + dx, floor + dy, size, Math.min(.9, (1 - stage) * 1.3), flip);
+  const age = fx.max - fx.life;
+  for (const [clip, delay, duration, dx, dy, size, flip] of techniqueBursts[fx.id]) {
+    const beat = (age - delay) / duration;
+    if (beat < 0 || beat >= 1) continue;
+    spellClip(clip, beat, x + dx, floor + dy, size, Math.min(.91, (1 - beat) * 2), flip);
   }
   spellClip("dust", stage, x - 105, floor, 1.7, .58, true);
   spellClip("dust", stage, x + 105, floor, 1.7, .58);
+}
+
+// Each technique sends patterned particles in a different fan. The variation
+// comes from its release angle and gravity, with no extra gameplay hit.
+const echoFlights = [
+  {count:26, width:260, lift:103, gravity:115, spread:1.60, turn:0},   // embers
+  {count:24, width:235, lift:8, gravity:15, spread:Math.PI, turn:1.30}, // clock fragments
+  {count:18, width:216, lift:67, gravity:75, spread:1.16, turn:0},     // balanced plumes
+  {count:28, width:248, lift:22, gravity:33, spread:Math.PI, turn:.30}, // prism chips
+  {count:21, width:192, lift:183, gravity:117, spread:1.04, turn:.46},  // leaves
+  {count:25, width:242, lift:86, gravity:17, spread:1.82, turn:1.22},   // butterflies
+  {count:24, width:281, lift:30, gravity:127, spread:.62, turn:0},      // rock slivers
+  {count:22, width:290, lift:12, gravity:49, spread:.87, turn:.63},     // seismic traces
+];
+
+function wardEchoFlights(x, y, fx, age) {
+  const flight = echoFlights[fx.id];
+  const [edge, color, tip] = techniqueInk[fx.id];
+  const motif = cutInThemes[fx.id].mote;
+  g.save();
+  for (let i = 0; i < flight.count; i++) {
+    const local = (age - .10 - (i % 7) * .041) / (1.02 + (i % 4) * .078);
+    if (local <= 0 || local >= 1) continue;
+    const a = (i % 2 ? Math.PI : 0) + (i * 2.39996 % 1.97 - .98) * flight.spread + local * flight.turn;
+    const spread = (1 - (1 - local) ** 2) * (.44 + (i % 6) * .12);
+    const vx = Math.cos(a), vy = Math.sin(a);
+    const px = x + vx * flight.width * spread;
+    const py = Math.min(fx.y + 1, y + vy * 75 * spread - flight.lift * local + flight.gravity * local * local);
+    const dot = i % 6 === 0 ? 2 : 1;
+    g.globalAlpha = (1 - local) ** 1.15 * .92;
+    fxLine([[px - vx * 28 * (1 - local), py - vy * 15], [px - vx * 12, py], [px, py]], edge, 4);
+    fxLine([[px - vx * 20 * (1 - local), py - vy * 10], [px, py]], color, 2);
+    paintMote(motif, px, py, color, tip, dot, r);
+  }
+  g.restore();
 }
 
 function shatteredWard(x, y, fx, t, soft) {
@@ -266,6 +322,7 @@ function drawWardTechniques() {
     if (!soft) {
       splinters(x, y, t, 255, tip, 34);
       splinters(x, y, t, 321, color, 19, .48);
+      wardEchoFlights(x, y, fx, fx.max - fx.life);
     }
     g.restore();
   }
@@ -325,14 +382,17 @@ const cutInThemes = [
     mote:["..++..",".+##+.","+#+##+","+##+#+",".+##+.","..++.."]}, // Core rings
 ];
 
-function cutInMote(pattern, x, y, color, face, size) {
+function paintMote(pattern, x, y, color, face, size, pixel) {
   for (const [row, marks] of pattern.entries()) {
     for (let col = 0; col < marks.length; col++) {
       if (marks[col] === ".") continue;
-      lightningInk.fillStyle = marks[col] === "+" ? face : color;
-      lightningInk.fillRect(Math.round(x + col * size), Math.round(y + row * size), size, size);
+      pixel(x + col * size, y + row * size, size, size, marks[col] === "+" ? face : color);
     }
   }
+}
+function cutInPixel(x, y, width, height, color) {
+  lightningInk.fillStyle = color;
+  lightningInk.fillRect(Math.round(x), Math.round(y), width, height);
 }
 
 function lightningRush(side, width, base, slant, px, age, theme, [edge, color, face]) {
@@ -357,7 +417,7 @@ function lightningRush(side, width, base, slant, px, age, theme, [edge, color, f
     for (let spark = 0; spark < 2; spark++) {
       const x = end + (12 + spark * 25) * (1 + release) / px;
       const py = y - x * slope - 2 - spark;
-      cutInMote(theme.mote, x, py, color, face, index < 3 && px > 2 && !spark ? 2 : 1);
+      paintMote(theme.mote, x, py, color, face, index < 3 && px > 2 && !spark ? 2 : 1, cutInPixel);
     }
   }
   lightningInk.globalAlpha = 1;

@@ -21,112 +21,162 @@ function techniqueGlyph(id, x, y, size, alpha = 1, flip = false, width = 1) {
   g.restore();
 }
 
-function fallingApples(x, y, p, alpha, scale) {
-  for (const i of [-1, 1, 0]) {
-    const progress = clamp(p * 1.35 - Math.abs(i) * .22, 0, 1);
-    const dx = i * (72 + 28 * (1 - progress)) * scale;
-    const py = y - (1 - progress) ** 1.45 * 230 * scale;
-    const size = i ? .68 : 1.32;
-    const trail = 83 * size * (1 - progress * .5);
-    for (const [sw, tint] of [[1, "#8f3327"], [.65, "#ff6836"], [.35, "#ffe2a3"]]) {
-      path([[x + dx - 26 * size * sw, py + 6], [x + dx - 18 * size * sw, py - trail * .63],
-        [x + dx - 30 + 13 * i, py - trail], [x + dx + 20 * size * sw, py - trail * .4],
-        [x + dx + 25 * size * sw, py + 8]], tint);
+function fallingApples(x, y, p, scale, foot, dir) {
+  for (const [offset, start, stop, size] of [[-104, .02, .75, .72], [97, .14, .88, .82], [0, .26, 1, 1.48]]) {
+    if (p < start || p > stop) continue;
+    const fall = ((p - start) / (stop - start)) ** 2.1;
+    const px = x + (offset - dir * (1 - fall) * 104) * scale;
+    const py = Math.min(foot - 32 * scale, y + 32 * scale) - (1 - fall) * 258 * scale;
+    const trail = 94 * scale * size;
+    for (const [sw, tint] of [[1, "#862d31"], [.74, "#ed4e30"], [.49, "#ff9c43"], [.24, "#ffedaa"]]) {
+      path([[px - trail * .26 * sw, py + 6], [px - dir * trail * .3, py - trail * .51],
+        [px - dir * trail * .67, py - trail], [px - dir * trail * .28 + trail * .26 * sw, py - trail * .51],
+        [px + trail * .26 * sw, py + 8]], tint);
     }
-    techniqueGlyph(0, x + dx, py, size * scale, alpha, i < 0);
+    techniqueGlyph(0, px, py, size * scale, 1, dir < 0);
   }
 }
 
-function stoppedClock(x, y, p, alpha, scale) {
-  const radius = (115 - 30 * p) * scale;
-  for (const side of [-1, 1]) {
-    fxArc(x, y, radius + 8 * side, radius * .74, "#479bdd", p * 2 + side, p * 2 + side + Math.PI, 3);
-    fxLine([[x - radius, y + 16 * side], [x - 30, y + side * 47], [x + radius, y - 25 * side]], "#88eaff", 2);
+function stoppedClock(x, y, p, scale) {
+  const radius = (73 + 48 * Math.min(1, p * 2.6)) * scale;
+  const ry = radius * .72;
+  const turn = Math.min(p, .75) * 5.5 - Math.PI / 2;
+  fxArc(x, y, radius + 5, ry + 5, "#284066", 0, Math.PI * 2, 8);
+  fxArc(x, y, radius, ry, "#8cdeff", 0, Math.PI * 2, 3);
+  fxArc(x, y, radius * .83, ry * .83, "#4e94c6", 0, Math.PI * 2, 2);
+  for (let i = 0; i < 24; i++) {
+    const a = i * Math.PI / 12;
+    const inset = i % 6 === 0 ? .82 : .92;
+    fxLine([[x + Math.cos(a) * radius * inset, y + Math.sin(a) * ry * inset],
+      [x + Math.cos(a) * radius, y + Math.sin(a) * ry]], i % 6 ? "#8cceea" : "#f0feff", i % 6 ? 1 : 4);
   }
-  for (let i = 0; i < 12; i++) {
-    const a = i * Math.PI / 6 - p * .6;
-    r(x + Math.cos(a) * radius, y + Math.sin(a) * radius * .74, i % 3 ? 3 : 6, 3, "#d5f7ff");
+  for (const [angle, length, width] of [[turn, .82, 4], [turn * .32 + 1.1, .49, 7]]) {
+    const ex = x + Math.cos(angle) * radius * length, ey = y + Math.sin(angle) * ry * length;
+    fxLine([[x,y], [ex,ey]], "#25578c", width + 4);
+    fxLine([[x,y], [ex,ey]], "#defcff", width);
   }
-  techniqueGlyph(1, x, y, (1 + .83 * p) * scale, alpha);
+  star(x, y, p > .75 ? 10 : 5, "#e4fcff");
 }
 
-function goldenBalance(x, y, p, alpha, scale) {
-  const shell = 108 * scale, base = y + 63 * scale;
-  const sweep = Math.sin(p * Math.PI);
+function goldenBalance(x, y, p, scale) {
+  const shell = 109 * scale;
+  const dip = Math.sin(p * Math.PI * 1.22) * (1 - p) * 48 * scale;
+  const rail = y - 62 * scale;
+  fxLine([[x - shell, rail - dip], [x, rail], [x + shell, rail + dip]], "#966136", 12);
+  fxLine([[x - shell, rail - dip - 2], [x, rail - 2], [x + shell, rail + dip - 2]], "#ffda7c", 4);
+  fxLine([[x,y - 110 * scale], [x,y + 34 * scale]], "#d59847", 7);
   for (const side of [-1, 1]) {
     const px = x + side * shell;
-    path([[px - 4, y - 100], [px + 5, y - 100], [px + 20 * sweep, base],
-      [px - 20 * sweep, base]], "#ad6b2d");
-    fxLine([[px, y - 104], [px, base]], "#fff0af", 3);
-    fxArc(px, base, 27 + sweep * 25, 8, "#ffc862", 0, Math.PI * 2, 2);
+    const pan = rail + side * dip + (77 + 28 * p ** 3) * scale;
+    const edge = 34 * scale;
+    fxLine([[px - edge, pan], [px, rail + side * dip], [px + edge, pan]], "#ffd789", 2);
+    path([[px - edge, pan], [px + edge, pan], [px + edge * .64, pan + 11], [px - edge * .64, pan + 11]], "#bd782f");
+    r(px - edge, pan - 1, edge * 2, 4, "#fff0ab");
+    const load = pan - 15 - Math.max(0, .76 - p) ** 2 * 118;
+    path([[px-17,load+14],[px-11,load],[px+11,load],[px+17,load+14]], "#7d4d27");
+    r(px - 11, load, 22, 4, "#efb361");
+    r(px - 7, load + 5, 5, 5, "#fff1b4");
   }
-  fxLine([[x - shell, y - 18], [x, y - 18 - 22 * (1 - p)], [x + shell, y - 18]], "#ffe3a1", 3);
-  techniqueGlyph(2, x, y - (1 - p) * 45, (1.3 + p * .46) * scale, alpha);
+  techniqueGlyph(2, x, rail - 11, .78 * scale);
 }
 
-function amethystLattice(x, y, p, alpha, scale) {
-  for (let row = -1; row <= 1; row++) {
-    for (let col = -2; col <= 2; col++) {
-      const px = x + (col * 37 + row * 15) * scale, py = y + row * 44 * scale;
-      const stretch = (18 + 6 * p) * scale;
-      const points = [[px,py-stretch], [px+stretch,py], [px,py+stretch], [px-stretch,py]];
-      fxLine([...points, points[0]], (row + col) % 2 ? "#a894f4" : "#6651aa", 2);
-      if ((row + col) % 2 === 0) star(px, py, 3, "#f1ddff");
+const latticeTiles = ["#8070d5", "#bd8de0", "#6bd0cb", "#e8ae8f"];
+function amethystLattice(x, y, p, scale) {
+  for (let row = 0; row < 4; row++) {
+    for (let col = -3; col <= 3; col++) {
+      if (row < 2 && Math.abs(col) < 2 && (row === 0 || col !== 0)) continue;
+      const slide = clamp((p - Math.abs(col) * .047 - row * .061) / .39, 0, 1);
+      if (!slide) continue;
+      const px = x + (col * (40 + (1 - slide) * 22) - 9 * row) * scale;
+      const py = y + ((row - 1.5) * 32 - (1 - slide) * 59) * scale;
+      const size = 28 * scale, ink = latticeTiles[(row + col + 4) % latticeTiles.length];
+      path([[px,py], [px+size,py], [px+size-5,py+size-2], [px-5,py+size-2]], "#30244d");
+      fxLine([[px-5,py+size-2], [px,py], [px+size,py]], ink, 2);
+      r(px + 4, py + 5, 8, 3, ink);
+      r(px + 4, py + 12, size - 12, 4, "#ebd8fd");
+      r(px + 3, py + 19, size - 15, 3, ink);
     }
   }
-  for (const side of [-1, 1]) techniqueGlyph(3, x + side * (115 - 44 * p) * scale, y + side * 21,
-    (.62 + p * .24) * scale, alpha, side < 0);
-  techniqueGlyph(3, x, y - 8, (1.28 + p * .36) * scale, alpha);
+  techniqueGlyph(3, x, y - 16, (1.35 + p * .36) * scale);
 }
 
-function risingSeed(x, y, p, alpha, scale) {
-  const base = y + 57 * scale;
+function risingSeed(x, y, p, scale, base) {
   for (const dir of [-1, 1]) {
-    const reach = (36 + p * 109) * scale, height = (20 + p * 99) * scale;
-    const curve = [[x + dir * reach, base + 12], [x + dir * reach * .69, base - height * .35],
-      [x + dir * reach * .54, base - height * .72], [x + dir * reach * .87, base - height]];
-    fxLine(curve, "#254c39", 11);
-    fxLine(curve, "#93d55c", 4);
-    for (const [px,py] of curve.slice(1)) {
-      path([[px,py + 5], [px + dir * 15,py - 13], [px + dir * 30,py - 15], [px + dir * 23,py + 1]], "#85bf4e");
-      fxLine([[px,py + 5], [px + dir * 20,py - 9]], "#d4ef85", 2);
+    for (const arm of [0, 1]) {
+      const grow = clamp(p * 1.21 - arm * .19, 0, 1);
+      if (!grow) continue;
+      const reach = (38 + arm * 39 + grow * 56) * scale;
+      const height = (30 + grow * (169 - arm * 52)) * scale;
+      const curve = [[x + dir * (22 + arm * 43), base], [x + dir * reach * .58, base - height * .31],
+        [x + dir * reach * .76, base - height * .63], [x + dir * reach, base - height]];
+      fxLine(curve, "#244836", arm ? 13 : 20);
+      fxLine(curve, "#83bb4d", arm ? 5 : 8);
+      for (const [i,[px,py]] of curve.slice(1).entries()) {
+        const s = 16 + grow * (25 - i * 4), side = i === 1 ? -dir : dir;
+        path([[px,py+4], [px+side*s*.39,py-s*.61], [px+side*s,py-s*.81], [px+side*s*.83,py-s*.22],
+          [px+side*s*.38,py+6]], i % 2 ? "#5a994d" : "#98c94e");
+        fxLine([[px,py+4], [px+side*s*.84,py-s*.65]], "#dff18f", 2);
+      }
     }
   }
-  techniqueGlyph(4, x, base - (18 + 67 * p) * scale, (1.03 + .7 * p) * scale, alpha);
+  techniqueGlyph(4, x, base - (18 + 138 * p) * scale, (1.0 + .83 * p) * scale);
 }
 
-function goldenWings(x, y, p, alpha, scale) {
-  for (let i = 0; i < 8; i++) {
-    const a = i * Math.PI / 4 + p * 1.5;
-    const radius = (178 - 62 * p + 27 * (i % 2)) * scale;
-    const px = x + Math.cos(a) * radius, py = y + Math.sin(a) * radius * .51;
-    const wave = .48 + .51 * Math.abs(Math.sin(p * 25 + i));
-    fxLine([[px,py], [x + Math.cos(a - .22) * radius, y + Math.sin(a - .22) * radius * .51]], "#f6bf6d", 2);
-    techniqueGlyph(5, px, py, .47 * scale, alpha, i % 2 === 0, wave);
+function goldenWings(x, y, p, scale, foot, dir) {
+  for (let i = 0; i < 15; i++) {
+    const flight = p * 1.3 - i * .033;
+    if (flight < 0 || flight > 1) continue;
+    const px = x + dir * (flight - .5) * 460 * scale;
+    const py = Math.min(foot - 20, y + (Math.sin(flight * Math.PI * 2.2 + i % 3 * .7) * 61 + (i % 3 - 1) * 25) * scale);
+    const flap = .35 + .65 * Math.abs(Math.sin(p * 29 + i * 2));
+    const size = (i === 2 || i === 8 ? .83 : .29 + i % 3 * .09) * scale;
+    fxLine([[px-dir*(29+i%3*12),py+12], [px-dir*16,py+1], [px,py]], "#ffc27a", 2);
+    techniqueGlyph(5, px, py, size, 1, dir < 0, flap);
   }
-  techniqueGlyph(5, x, y - 11 * p, (1.08 + p * .62) * scale, alpha);
 }
 
-function plateCollision(x, y, p, alpha, scale) {
-  const base = y + 72 * scale;
-  const shove = (1 - p) * 110 * scale;
+function plateCollision(x, y, p, scale, base) {
+  const shove = (1 - p ** 2.1) * 170 * scale;
   for (const side of [-1, 1]) {
-    const px = x + side * (43 + shove);
-    path([[px + side * 98,base], [px + side * 65,base - 15], [px + side * 51,base - 45 * p],
-      [px,base - 52 * p], [px - side * 14,base - 9]], "#613b32");
-    techniqueGlyph(6, px, base - 30 - 50 * p, (1 + .15 * p) * scale, alpha, side < 0);
-    fxLine([[x,base], [px,base + 9], [px + side * 42,base - 2], [px + side * 87,base + 5]], "#ffbd71", 4);
+    const px = x + side * (10 + shove);
+    const outer = (186 - 28 * (1 - p)) * scale;
+    const upslope = [[px,base - 73 * p], [px+side*32,base - 105 * p], [px+side*74,base-48-18*p],
+      [px+side*118,base-46], [px+side*outer,base-21]];
+    path([...upslope,[px+side*outer,base+12],[px+side*14,base+19]], "#473140");
+    for (const [depth, tint, width] of [[15,"#ae614d",13],[29,"#e6995b",8],[43,"#784a4a",6],[51,"#d07f52",4]]) {
+      fxLine(upslope.map(([tx,ty], index) => [tx, Math.min(base + 9 - index, ty + depth)]), tint, width);
+    }
+    fxLine(upslope, "#ffd78c", 4);
+    techniqueGlyph(6, px + side * 59, base - 38 - 35 * p, .94 * scale, .85, side < 0);
   }
 }
 
-function innerCore(x, y, p, alpha, scale) {
-  for (let i = 0; i < 4; i++) {
-    const radius = (35 + i * 29 + p * 26) * scale;
-    const crest = y + (i % 2 ? 12 : -3);
-    fxArc(x, crest, radius, radius * .64, i % 2 ? "#fd9b51" : "#ffdc8b", i * .66, i * .66 + Math.PI * 1.62, 3);
-    fxArc(x, y + 63 * scale, radius * 1.17, 7 + i * 5, "#edaa5b", Math.PI, Math.PI * 2, 2);
+function seismicTrace(x, y, distance, direction, reach, amplitude, color) {
+  if (distance <= 0) return;
+  const part = Math.min(reach, distance);
+  const first = Math.max(0, distance - reach);
+  const points = [];
+  for (let hop = 0; hop <= 12; hop++) {
+    const offset = first + part * hop / 12;
+    const pulse = Math.sin(hop * 2.3) * Math.sin(Math.PI * hop / 12) * amplitude;
+    points.push([x + direction * offset, y + pulse]);
   }
-  techniqueGlyph(7, x, y, (1.06 + .62 * p) * scale, alpha);
+  fxLine(points, "#5a3548", 6);
+  fxLine(points, color, 3);
+}
+
+function innerCore(x, y, p, scale, base) {
+  const radius = (67 + 40 * p) * scale;
+  for (let i = 0; i < 3; i++) {
+    const shell = radius * (1 - i * .19);
+    fxArc(x, y, shell, shell * .79, ["#934f5c", "#c76b51", "#ffd18f"][i], -.85, Math.PI * 1.16, 4 - i);
+    fxLine([[x + shell * .65,y - shell * .53],[x,y],[x - shell * .88,y + shell * .33]], "#a75e56", 2);
+  }
+  techniqueGlyph(7, x, y, (1.0 + .55 * p) * scale);
+  for (const sign of [-1,1]) {
+    seismicTrace(x, base - 18, p * 207, sign, 110, 8, "#ffe6a1");
+    seismicTrace(x, base - 39, (p - .21) * 147, sign, 96, 17, "#f29e85");
+  }
 }
 
 const techniquePoses = [fallingApples, stoppedClock, goldenBalance, amethystLattice,
@@ -135,54 +185,16 @@ const techniquePoses = [fallingApples, stoppedClock, goldenBalance, amethystLatt
 // [atlas clip, delay, duration, x offset, y offset, scale, mirrored].
 // Each follow-through has its own rhythm and stays behind the fighters.
 const techniqueBursts = [
-  [["meteor",0,.74,0,0,1.46], ["gravity",0,.51,0,-73,2.2],
-    ["meteor",.21,.65,-132,0,1.01,true], ["meteor",.32,.65,139,0,.97],
-    ["victoryEarth",.44,.82,0,0,1.43]],
-  [["space",0,.65,-84,-85,1.72,true], ["space",0,.65,84,-85,1.72],
-    ["orbitSeal",.14,.71,0,-3,2.65], ["space",.34,.54,-169,-105,1.06,true],
-    ["space",.47,.62,169,-105,1.06], ["victoryPhysics",.37,.93,0,0,1.58]],
-  [["restore",0,.72,-113,-5,2.26], ["restore",0,.72,113,-5,2.26],
-    ["reactionSeal",.18,.86,0,-2,2.80], ["restore",.32,.76,-196,-6,1.41,true],
-    ["restore",.32,.76,196,-6,1.41], ["victoryChemistry",.40,.83,0,0,1.30]],
-  [["prism",0,.58,-45,-62,1.60], ["prism",0,.58,45,-62,1.60,true],
-    ["reactionSeal",.1,.82,0,0,2.28], ["prism",.31,.65,-128,-40,1.32,true],
-    ["prism",.39,.65,128,-47,1.32], ["victoryChemistry",.49,.84,0,0,1.34]],
-  [["roots",0,.83,0,0,3.10], ["thicket",.10,.67,45,0,1.44,true],
-    ["thicket",.10,.67,-45,0,1.44], ["thicket",.36,.78,-176,0,1.26],
-    ["thicket",.40,.78,176,0,1.26,true], ["victoryBiology",.38,.92,0,0,1.66]],
-  [["wings",0,.77,-78,-95,1.55,true], ["wings",0,.77,78,-95,1.55],
-    ["livingSeal",.13,.73,0,-3,2.50], ["wings",.36,.75,-168,-80,1.13,true],
-    ["wings",.36,.75,168,-80,1.13], ["wings",.50,.78,0,-143,1.44]],
-  [["fault",0,.67,-55,0,1.24], ["fault",0,.67,55,0,1.24,true],
-    ["quake",.14,.74,0,0,1.56], ["fault",.31,.72,-179,0,.93,true],
-    ["fault",.31,.72,179,0,.93], ["victoryEarth",.43,.88,0,0,1.58]],
-  [["core",0,.74,0,-4,1.87], ["quake",.13,.71,-130,-2,1.24,true],
-    ["quake",.13,.71,130,-2,1.24], ["core",.40,.68,0,-4,2.03],
-    ["quake",.56,.78,-228,0,1.23,true], ["quake",.56,.78,228,0,1.23]],
+  [["meteor",0,.71,0,0,1.28], ["meteor",.18,.58,-112,0,.83,true], ["meteor",.31,.58,117,0,.92]],
+  [["space",.13,.74,-108,-64,1.12,true], ["space",.13,.74,108,-64,1.12]],
+  [["restore",.04,.98,-110,-3,1.42], ["restore",.04,.98,110,-3,1.42]],
+  [["prism", .02,.62,-66,-64,1.23], ["prism",.12,.59,88,-52,1.30,true]],
+  [["roots",0,.98,0,0,2.15], ["thicket",.28,.65,-127,0,1.08], ["thicket",.34,.65,127,0,1.08,true]],
+  [["wings", .15,.73,-128,-119,1.0,true], ["wings",.31,.74,136,-85,1.12]],
+  [["fault",.04,.77,-48,0,1.18], ["fault",.04,.77,48,0,1.18,true], ["dust",.29,.91,0,0,2.5]],
+  [["core",.11,.76,0,-4,1.24], ["quake",.24,.73,-157,0,1.26,true], ["quake",.38,.73,157,0,1.26]],
 ];
-const techniqueSeals = ["orbitSeal", "reactionSeal", "livingSeal", "strataSeal"];
-
-function wardConvergence(x, foot, height, p, id) {
-  const [edge, color, tip] = techniqueInk[id];
-  const origin = foot - height * .49;
-  const radius = 208 - p * 102;
-  g.save();
-  g.globalAlpha *= Math.min(.88, p * 1.3);
-  spellClip(techniqueSeals[id >> 1], .29 + .39 * p, x, foot - 3, 1.65 + .42 * p, .85);
-  const sweep = 1 - (1 - p) ** 2;
-  fxArc(x, foot - 4, 89 + sweep * 155, 10 + sweep * 20, tip, p * 3, p * 3 + Math.PI * 1.28, 2);
-  fxArc(x, foot - 3, radius * 1.1, 14 + p * 5, edge, 0, Math.PI * 2, 5);
-  fxArc(x, foot - 3, radius * 1.1, 14 + p * 5, color, 0, Math.PI * 2, 2);
-  for (let i = 0; i < 20; i++) {
-    const angle = i * 2.39996 + p * 1.4;
-    const dir = Math.cos(angle), rise = Math.sin(angle) * .7;
-    const distance = radius * (.76 + i % 5 * .085), length = 10 + i % 4 * 9;
-    const px = x + dir * distance, py = origin + rise * distance;
-    fxLine([[px + dir * length, py + rise * length], [px, py]], color, 2);
-    r(px - 1, py - 1, i % 4 === 0 ? 4 : 2, 3, tip);
-  }
-  g.restore();
-}
+const techniqueShade = ["#401822", "#102647", "#3c291b", "#2d204c", "#1c3a32", "#3c2a20", "#362129", "#372438"];
 
 function drawWardTechniqueBack() {
   if (quietCombat()) return;
@@ -190,15 +202,12 @@ function drawWardTechniqueBack() {
   const impact = effects.find(fx => fx.type === "wardImpact");
   if (!charging && !impact) return;
   const fx = charging?.wardCast ?? impact;
-  const stage = charging ? clamp(fx.elapsed / wardImpactTime, 0, 1) : 1 - fx.life / fx.max;
+  const stage = charging ? clamp(fx.elapsed / wardChoreography[fx.id].impact, 0, 1) : 1 - fx.life / fx.max;
   g.save();
-  g.globalAlpha *= charging ? .29 * Math.min(1, stage * 4) : .27 * (1 - stage);
-  r(-18, 0, W + 36, H, "#101a2f");
+  g.globalAlpha *= charging ? .22 * Math.min(1, stage * 4) : .23 * (1 - stage);
+  r(-18, 0, W + 36, H, techniqueShade[fx.id]);
   g.restore();
-  if (charging) {
-    wardConvergence(charging.x - cam, charging.y, charging.height, stage, fx.id);
-    return;
-  }
+  if (charging) return;
   const x = fx.x - cam, floor = fx.y;
   const age = fx.max - fx.life;
   for (const [clip, delay, duration, dx, dy, size, flip] of techniqueBursts[fx.id]) {
@@ -206,48 +215,11 @@ function drawWardTechniqueBack() {
     if (beat < 0 || beat >= 1) continue;
     spellClip(clip, beat, x + dx, floor + dy, size, Math.min(.91, (1 - beat) * 2), flip);
   }
-  spellClip("dust", stage, x - 105, floor, 1.7, .58, true);
-  spellClip("dust", stage, x + 105, floor, 1.7, .58);
-}
-
-// Each technique sends patterned particles in a different fan. The variation
-// comes from its release angle and gravity, with no extra gameplay hit.
-const echoFlights = [
-  {count:26, width:260, lift:103, gravity:115, spread:1.60, turn:0},   // embers
-  {count:24, width:235, lift:8, gravity:15, spread:Math.PI, turn:1.30}, // clock fragments
-  {count:18, width:216, lift:67, gravity:75, spread:1.16, turn:0},     // balanced plumes
-  {count:28, width:248, lift:22, gravity:33, spread:Math.PI, turn:.30}, // prism chips
-  {count:21, width:192, lift:183, gravity:117, spread:1.04, turn:.46},  // leaves
-  {count:25, width:242, lift:86, gravity:17, spread:1.82, turn:1.22},   // butterflies
-  {count:24, width:281, lift:30, gravity:127, spread:.62, turn:0},      // rock slivers
-  {count:22, width:290, lift:12, gravity:49, spread:.87, turn:.63},     // seismic traces
-];
-
-function wardEchoFlights(x, y, fx, age) {
-  const flight = echoFlights[fx.id];
-  const [edge, color, tip] = techniqueInk[fx.id];
-  const motif = cutInThemes[fx.id].mote;
-  g.save();
-  for (let i = 0; i < flight.count; i++) {
-    const local = (age - .10 - (i % 7) * .041) / (1.02 + (i % 4) * .078);
-    if (local <= 0 || local >= 1) continue;
-    const a = (i % 2 ? Math.PI : 0) + (i * 2.39996 % 1.97 - .98) * flight.spread + local * flight.turn;
-    const spread = (1 - (1 - local) ** 2) * (.44 + (i % 6) * .12);
-    const vx = Math.cos(a), vy = Math.sin(a);
-    const px = x + vx * flight.width * spread;
-    const py = Math.min(fx.y + 1, y + vy * 75 * spread - flight.lift * local + flight.gravity * local * local);
-    const dot = i % 6 === 0 ? 2 : 1;
-    g.globalAlpha = (1 - local) ** 1.15 * .92;
-    fxLine([[px - vx * 28 * (1 - local), py - vy * 15], [px - vx * 12, py], [px, py]], edge, 4);
-    fxLine([[px - vx * 20 * (1 - local), py - vy * 10], [px, py]], color, 2);
-    paintMote(motif, px, py, color, tip, dot, r);
-  }
-  g.restore();
 }
 
 function shatteredWard(x, y, fx, t, soft) {
   const [edge, color, tip] = techniqueInk[fx.id];
-  const pieces = soft ? 8 : 21;
+  const pieces = soft ? 7 : 13;
   for (let i = 0; i < pieces; i++) {
     const a = i * 2.39996;
     const sx = Math.cos(a), sy = Math.sin(a);
@@ -264,28 +236,110 @@ function shatteredWard(x, y, fx, t, soft) {
   }
 }
 
-function wardShockwave(x, foot, height, t, color, tip, soft) {
-  const rings = soft ? 1 : 3;
-  for (let i = 0; i < rings; i++) {
-    const wave = (t - i * .105) / .64;
-    if (wave < 0 || wave > 1) continue;
-    const span = 29 + (1 - (1 - wave) ** 2.3) * (soft ? 118 : 337);
-    g.save();
-    g.globalAlpha *= 1 - wave;
-    fxArc(x, foot - 4, span, 5 + wave * 27, color, 0, Math.PI * 2, i ? 2 : 4);
-    if (!soft) fxArc(x, foot - 7, span * .86, 4 + wave * 21, tip, Math.PI, Math.PI * 2, 2);
-    g.restore();
+function drawTechniqueRelease(x, y, fx, t) {
+  const [, color, tip] = techniqueInk[fx.id];
+  const foot = fx.y, age = fx.max - fx.life;
+  const stretch = 1 - (1 - t) ** 2;
+  switch (fx.id) {
+    case 0:
+      for (const [dx, delay, width] of [[0,0,110],[-112,.18,58],[117,.31,62]]) {
+        const fire = (age - delay) / .66;
+        if (fire < 0 || fire > 1) continue;
+        const px = x + dx, height = 126 * (1 - fire) ** 1.35;
+        path([[px-width*.52,foot], [px-width*.31,foot-height*.28], [px-width*.15,foot-height],
+          [px+width*.11,foot-height*.24], [px+width*.29,foot-height*.60], [px+width*.55,foot]], "#bf482e");
+        fxLine([[px-width*.42,foot-2],[px-width*.18,foot-height*.18],[px+7,foot-2],[px+width*.37,foot-height*.28]], tip, 4);
+        for (let i = 0; i < 12; i++) {
+          const py = foot - (48 + i * 53 % 119) * Math.sin(fire * Math.PI);
+          r(px + (i - 5.5) * (3 + 15 * fire),py,2 + i % 3,4 + i % 3,i % 3 ? color : tip);
+        }
+      }
+      break;
+    case 1:
+      for (const side of [-1, 1]) {
+        const cx = x + side * (7 + stretch * 164);
+        // The clock splits into two time slices before the sweep fades.
+        g.save();
+        g.beginPath();
+        g.rect(side < 0 ? cx - 125 : cx, y - 105, 125, 210);
+        g.clip();
+        stoppedClock(cx, y, 1, 1.03);
+        g.restore();
+        fxLine([[cx+side*15,y-98],[cx,y-61],[cx+side*9,y-19],[cx-side*8,y+16],[cx,y+90]], color, 4);
+        for (let i = 0; i < 6; i++) {
+          const width = 35 + i % 3 * 19;
+          r(cx + side * i * 11 - (side < 0 ? width : 0), y - 82 + i * 31, width, i % 3 ? 2 : 4, tip);
+        }
+      }
+      break;
+    case 2:
+      for (const side of [-1, 1]) {
+        const panX = x + side * 108, panY = foot - 61 + Math.min(1, age / .28) * 55;
+        const span = 39 + stretch * 37;
+        path([[panX-span,panY],[panX+span,panY],[panX+span*.62,panY+9],[panX-span*.59,panY+9]], "#a16a37");
+        r(panX-span,panY,span*2,4,tip);
+        for (let i = 0; i < 6; i++) {
+          const size = 9 + i * 4, px = panX + (i - 2.5) * (12 + 18 * stretch);
+          const py = foot - 11 - Math.sin(Math.min(1, age / .93) * Math.PI) * (40 + 10 * (i % 3));
+          r(px-size*.5,py,size,3,i % 2 ? color : tip);
+          r(px-2,py-3,4,9,color);
+        }
+      }
+      fxLine([[x-196,foot-10],[x-108,foot-10],[x-20,foot-11],[x,foot-22],[x+20,foot-11],[x+196,foot-10]], color, 2);
+      break;
+    case 3:
+      for (let i = 0; i < 18; i++) {
+        const side = i % 2 ? 1 : -1;
+        const px = x + side * (26 + stretch * (101 + i * 17 % 138));
+        const py = y + (i % 6 - 2.5) * 26 + stretch * (i % 3 - 1) * 43;
+        const tint = latticeTiles[i % latticeTiles.length];
+        path([[px-8,py-11],[px+9,py-11],[px+14,py],[px+4,py+11],[px-12,py+6]], "#563c85");
+        fxLine([[px-8,py-11],[px+9,py-11],[px+14,py]], tint, 3);
+        r(px-3,py-2,9,3,tip);
+        if (t < .37) fxLine([[px-side*68,py+19],[px-side*29,py+3],[px-side*9,py]], tint, 2);
+      }
+      break;
+    case 4:
+      g.save();
+      g.globalAlpha *= .82;
+      risingSeed(x, y, 1 - t * .20, 1.05, foot);
+      g.restore();
+      for (let i = 0; i < 21; i++) {
+        const side = i % 2 ? -1 : 1;
+        const px = x + side * (24 + stretch * (62 + i * 21 % 111));
+        const py = foot - (38 + i * 29 % 138) - stretch * (27 + i % 5 * 9);
+        const size = 4 + i % 5;
+        path([[px,py],[px+side*size,py-size-3],[px+side*size*2,py-size],[px+side*size,py+3]], i % 3 ? color : tip);
+      }
+      break;
+    case 5:
+      for (let i = 0; i < 21; i++) {
+        const pace = clamp(age * .81 - i * .025, 0, 1);
+        const px = x + fx.dir * ((i * 53 % 189) - 98 + pace * 344);
+        const py = y + (i % 5 - 2) * 18 - pace * (101 + i % 3 * 24) + Math.sin(pace * 9 + i) * 18;
+        const flap = .37 + Math.abs(Math.sin(age * 26 + i)) * .63;
+        fxLine([[px-fx.dir*51,py+15],[px-fx.dir*18,py+5],[px,py]], i % 3 ? color : tip, 2);
+        techniqueGlyph(5, px, py, i % 4 ? .36 : .61, 1, fx.dir < 0, flap);
+      }
+      break;
+    case 6:
+      plateCollision(x, y, 1 - t * .07, 1, foot);
+      for (let i = 0; i < 22; i++) {
+        const dx = (i - 10.5) * 12 * stretch;
+        const rise = Math.min(1, age / .9), py = foot - (65 + i * 37 % 124) * 4 * rise * (1 - rise);
+        const size = 4 + i % 7;
+        path([[x+dx,py],[x+dx+size,py-size*.5],[x+dx+size*.4,py+size],[x+dx-size,py+size*.5]], i % 4 ? "#a45e4d" : tip);
+      }
+      break;
+    case 7:
+      for (const side of [-1, 1]) {
+        seismicTrace(x, foot - 14, age * 496, side, 181, 11, tip);
+        seismicTrace(x, foot - 42, (age - .16) * 325, side, 153, 21, "#ffae91");
+        seismicTrace(x, foot - 62, (age - .33) * 206, side, 113, 13, "#ec8f70");
+      }
+      if (t < .55) techniqueGlyph(7, x, y, 1.28 + t * .42, 1 - t / .55);
+      break;
   }
-  if (soft || t > .21) return;
-  const quick = t / .21, center = foot - height * .51;
-  const breadth = 38 + quick * 231;
-  g.save();
-  g.globalAlpha *= (1 - quick) ** 2;
-  path([[x-breadth,center+16], [x-25,center-4], [x,center-38], [x+24,center-10],
-    [x+breadth,center-17], [x+29,center+4], [x+2,center+30], [x-24,center+12]], color);
-  path([[x-breadth*.72,center+11], [x-9,center-3], [x+3,center-22],
-    [x+13,center-4], [x+breadth*.72,center-12], [x+15,center+3], [x,center+17], [x-9,center+5]], tip);
-  g.restore();
 }
 
 function drawWardTechniques() {
@@ -293,37 +347,26 @@ function drawWardTechniques() {
   for (const boss of foes) {
     const cast = boss.wardCast;
     if (!cast) continue;
-    const progress = clamp(cast.elapsed / wardImpactTime, 0, 1);
+    const progress = clamp(cast.elapsed / wardChoreography[cast.id].impact, 0, 1);
     const x = boss.x - cam, y = boss.y - boss.height * .5;
     const scale = Math.min(1.14, boss.height / 175);
     const alpha = Math.min(.88, .24 + progress);
     g.save();
     g.globalAlpha *= alpha;
     if (soft) techniqueGlyph(cast.id, x, y, .98 * scale);
-    else techniquePoses[cast.id](x, y, progress, 1, scale);
+    else techniquePoses[cast.id](x, y, progress, scale, boss.y, cast.dir);
     g.restore();
   }
   for (const fx of effects) {
     if (fx.type !== "wardImpact") continue;
     const x = fx.x - cam, y = fx.y - fx.height * .51;
     const t = 1 - fx.life / fx.max;
-    const expand = 1 - (1 - t) ** 3;
-    const [, color, tip] = techniqueInk[fx.id];
+    const [, color] = techniqueInk[fx.id];
     g.save();
     g.globalAlpha *= (1 - t) ** 1.2;
-    if (!soft && t < .48) {
-      g.save();
-      g.globalAlpha *= 1 - t / .48;
-      techniquePoses[fx.id](x, y, 1, 1, Math.min(1.18, fx.height / 172) * (1 + expand * .16));
-      g.restore();
-    }
+    if (!soft) drawTechniqueRelease(x, y, fx, t);
+    else fxArc(x, fx.y - 2, 22 + t * 105, 4 + t * 7, color, 0, Math.PI * 2, 2);
     shatteredWard(x, y, fx, t, soft);
-    wardShockwave(x, fx.y, fx.height, t, color, tip, soft);
-    if (!soft) {
-      splinters(x, y, t, 255, tip, 34);
-      splinters(x, y, t, 321, color, 19, .48);
-      wardEchoFlights(x, y, fx, fx.max - fx.life);
-    }
     g.restore();
   }
 }

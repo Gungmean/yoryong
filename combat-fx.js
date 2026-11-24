@@ -236,7 +236,7 @@ function warningPath(e) {
   const t = bossWarningProgress(e);
   for (const zone of strikes) drawBossZone({ ...zone, id: move.id, rift: e.kind === 4 }, true, t);
   if (move.dash) {
-    warningLane(start - cam - dir * e.half * .56, end - cam + dir * e.half * .56, GROUND - 18, color, t);
+    warningLane(start - cam - dir * e.half * .56, end - cam + dir * e.half * .56, GROUND - 20, color, t, 19);
     return;
   }
   const lanes = new Set();
@@ -250,14 +250,14 @@ function warningPath(e) {
   }
 }
 
-function warningLane(from, to, y, color, t) {
+function warningLane(from, to, y, color, t, halfHeight = 15) {
   const side = Math.sign(to - from);
   const first = Math.max(-14, Math.min(from, to));
   const last = Math.min(W + 14, Math.max(from, to));
   if (!side || first >= last) return;
   g.save();
   g.globalAlpha = .61 + t * .2;
-  r(first, y - 14, last - first, 29, "#7c3b4938");
+  r(first, y - halfHeight, last - first, halfHeight * 2, "#7c3b4938");
   fxLine([[first, y], [last, y]], "#402535", 5);
   fxLine([[first, y], [last, y]], color, 2);
   for (let x = first + 19; x < last - 7; x += 42) {
@@ -269,9 +269,94 @@ function warningLane(from, to, y, color, t) {
   g.restore();
 }
 
+const signatureColors = ["#89defc", "#f4cd6c", "#b4ec88", "#ffac6c", "#edafff"];
+
+function drawSignatureZone(zone, warning, t) {
+  const {radius:span, height, id, rift} = zone;
+  const x = zone.x - cam, y = GROUND, top = y - height;
+  const left = x - span, right = x + span;
+  const color = signatureColors[rift ? 4 : id];
+  const age = Math.max(0, zone.timer || 0);
+  const fade = warning ? 1 : Math.min(1, (zone.linger - age) * 8);
+  const motion = quietCombat() ? .52 : warning ? t : age;
+  g.save();
+  g.globalAlpha *= fade;
+  r(left, top, span * 2, height, warning ? "#aa4b4b47" : "#492e4b81");
+  r(left, top, 2, height, warning ? "#ffbc9b" : color);
+  r(right - 2, top, 2, height, warning ? "#ffbc9b" : color);
+  r(left, y - 4, span * 2, 4, color);
+  for (let px = left + 4; px < right - 6; px += 12) r(px, y - 7, 6, 2, "#fff2cb");
+  g.save();
+  g.beginPath();
+  g.rect(left, top, span * 2, height);
+  g.clip();
+  g.globalAlpha *= warning ? .68 : .95;
+  if (rift) {
+    // The roof's breath has overlapping scale silhouettes, even close to the floor.
+    for (let i = 0; i < 7; i++) {
+      const py = top + ((i * height / 5 + motion * 90) % height);
+      const depth = Math.min(22, height * .4);
+      path([[left, py - depth], [x, py + depth], [right, py - depth], [right, py], [x, py + depth * 1.6], [left, py]], "#8f4aaf");
+      fxLine([[left, py - depth], [x, py + depth], [right, py - depth]], color, warning ? 2 : 4);
+    }
+  } else if (id === 0) {
+    const cy = top + height * .46;
+    for (let i = 0; i < 4; i++) {
+      const scale = .26 + ((i * .23 + 1 - motion * .69) % .67);
+      fxArc(x, cy, span * scale, height * .50 * scale, i === 1 ? "#e1fcff" : color, 0, Math.PI * 2, i === 1 ? 3 : 2);
+    }
+    fxLine([[x, top + 9], [x, y - 12]], "#8cb4f3", 1);
+    star(x, cy, warning ? 6 : 12, "#dafaef");
+  } else if (id === 1) {
+    const fill = warning ? Math.max(4, t * height * .58) : height * .78;
+    r(left, y - fill, span * 2, fill, "#a86831");
+    r(left, y - fill, span * 2, 3, color);
+    for (let i = 0; i < 11; i++) {
+      const py = y - 3 - ((i * 11 + motion * 42) % Math.max(5, fill));
+      const px = left + 9 + i * (span * 2 - 18) / 11;
+      fxArc(px, py, 2 + i % 4, 2 + i % 3, i % 3 ? color : "#fff5ad");
+    }
+  } else if (id === 2) {
+    for (let i = -1; i <= 1; i++) {
+      const rise = height * (.58 + .13 * (i + 1)) * (warning ? .67 : Math.min(1.18, .78 + motion * 2));
+      const px = x + i * span * .49;
+      const branch = [[px, y], [px + i * 9, y - rise * .36], [px - i * 7, y - rise * .66], [px + i * 11, y - rise]];
+      fxLine(branch, "#395939", 10);
+      fxLine(branch, color, 3);
+      for (const [bx, by] of branch.slice(1)) {
+        const side = i || 1;
+        path([[bx, by], [bx + side * 13, by - 13], [bx + side * 20, by - 14], [bx + side * 13, by - 2]], "#e6df90");
+      }
+    }
+  } else {
+    const crest = y - height * (warning ? .60 : .96);
+    const crack = [[left, y - 6], [x - span * .55, crest + 10], [x - 7, y - 12], [x + 8, crest], [right, y - 9]];
+    path([...crack, [right, y], [left, y]], "#804e46");
+    fxLine(crack, color, warning ? 2 : 5);
+    fxLine(crack.map(([px, py]) => [px, py + 5]), "#e88057", 2);
+    if (!warning) for (let i = 0; i < 9; i++) {
+      const px = left + 5 + i * span * .21;
+      const py = y - 8 - (i * 11 % 24) - motion * 32;
+      r(px, py, 3 + i % 4, 2 + i % 3, i % 2 ? color : "#fff2ac");
+    }
+  }
+  g.restore();
+  if (warning && zone.beat) {
+    const tagX = left + 11, tagY = top - 14;
+    r(tagX - 9, tagY, 18, 15, "#281c31");
+    r(tagX - 9, tagY, 18, 2, color);
+    word(String(zone.beat), tagX, tagY + 8, 10, "#fff4d9");
+  }
+  g.restore();
+}
+
 function drawBossZone(zone, warning, t) {
   const x = zone.x - cam, y = GROUND, width = zone.radius * 2;
   if (x + zone.radius < -10 || x - zone.radius > W + 10) return;
+  if (zone.signature) {
+    drawSignatureZone(zone, warning, t);
+    return;
+  }
   const left = x - zone.radius, right = x + zone.radius, top = y - zone.height;
   const color = zone.rift ? "#e493ff" : subjects[zone.id].color;
   g.save();

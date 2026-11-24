@@ -38,6 +38,16 @@ const wardTechniques = [
   "홍염 사과 낙하", "정지한 시계", "황금의 평형추", "자수정 원소진",
   "새싹의 용틀임", "황금 날개 군무", "대륙판 충돌", "내핵 공명",
 ];
+const wardChoreography = [
+  { impact: .86, tail: 1.40, shake: 12, pause: .105 }, // Newton: heavy vertical stop
+  { impact: .66, tail: 1.42, shake: 3, pause: .118 },  // Einstein: hold, then release
+  { impact: .80, tail: 1.52, shake: 8, pause: .072 },  // Lavoisier: settling pans
+  { impact: .74, tail: 1.36, shake: 5, pause: .048 },  // Mendeleev: quick fracture
+  { impact: .90, tail: 1.63, shake: 8, pause: .063 },  // Mendel: growing canopy
+  { impact: .70, tail: 1.56, shake: 4, pause: .036 },  // Darwin: continuous sweep
+  { impact: .91, tail: 1.66, shake: 13, pause: .110 }, // Wegener: collision
+  { impact: .79, tail: 1.69, shake: 9, pause: .075 },  // Lehmann: traveling pulses
+];
 
 function wardClosed(boss) {
   return boss.boss && boss.hp > 0 && boss.hp <= studyFloor(boss);
@@ -154,6 +164,13 @@ function castScholarUltimate() {
   if (modal || cutInRemaining || !boss || boss.wardCast) return;
   const [id] = bossStudies[boss.kind][boss.readyWard];
   const dir = Math.sign(boss.x - player.x) || player.face;
+  boss.warn = 0;
+  boss.plan = null;
+  boss.rush = null;
+  boss.action = 0;
+  boss.bolts.length = 0;
+  bossZones.length = 0;
+  shots = shots.filter(shot => !shot.team);
   boss.wardCast = {id, dir, elapsed:0};
   player.castTime = .42;
   showScholarCutIn(id);
@@ -163,32 +180,27 @@ function castScholarUltimate() {
   $("world").focus({preventScroll:true});
 }
 
-const wardImpactTime = .66;
 function advanceWardCast(boss, dt) {
   const cast = boss.wardCast;
   if (!cast) return;
   cast.elapsed += dt;
-  if (cast.elapsed < wardImpactTime) return;
   const {id, dir} = cast;
+  const stage = wardChoreography[id];
+  if (cast.elapsed < stage.impact) return;
   boss.wardCast = null;
   boss.openStudy = boss.readyWard;
   boss.readyWard = null;
   boss.wardBreak = .65;
-  boss.warn = 0;
-  boss.rush = null;
-  boss.action = 0;
-  boss.bolts.length = 0;
-  bossZones.length = 0;
-  shots = shots.filter(shot => !shot.team);
   boss.time = 1;
   player.inv = Math.max(player.inv, 1.1);
-  combatEvent("wardImpact", boss.x, boss.y, quietCombat() ? 1.32 : 1.64, {id, height:boss.height, half:boss.half});
-  playEffect("phase");
-  if (skillSounds[id].onGround) playEffect(skillSounds[id].impact);
-  hitFoe(boss, Math.ceil((boss.hp - studyFloor(boss)) * .22), id, dir);
-  if (!quietCombat()) {
-    shake = Math.max(shake, 10);
-    contactPause = Math.max(contactPause, .085);
+  const soft = quietCombat();
+  combatEvent("wardImpact", boss.x, boss.y, soft ? 1.25 : stage.tail, {id, dir, height:boss.height, half:boss.half});
+  playEffect(skillSounds[id].impact, soft ? .54 : 1.25);
+  if (!soft) playEffect("phase", .54);
+  hitFoe(boss, Math.ceil((boss.hp - studyFloor(boss)) * .22), id, dir, true);
+  if (!soft) {
+    shake = Math.max(shake, stage.shake);
+    contactPause = Math.max(contactPause, stage.pause);
   }
   notify("보호막 파괴 · 지금 공격하세요!");
   statusBars();

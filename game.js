@@ -1163,7 +1163,7 @@ function winBoss(i) {
     "모험 계속하기",
   );
 }
-function hitFoe(e, n, skill = -1, dir = player.face) {
+function hitFoe(e, n, skill = -1, dir = player.face, ultimate = false) {
   if (e.dying || !foes.includes(e) || wardClosed(e)) return;
   const wasAboveHalf = e.boss && bossPhase(e) === 1;
   if (e.boss) n = Math.min(n, e.hp - studyFloor(e));
@@ -1171,15 +1171,15 @@ function hitFoe(e, n, skill = -1, dir = player.face) {
   e.hit = 0.19;
   const chest = e.y - (e.boss ? e.height * .42 : 20);
   texts.push({ x: e.x, y: chest - (e.boss ? 33 : 14), n: Math.ceil(n), life: 0.68 });
-  spark(e.x, chest - 8, "#ffe39b", 8);
-  if (!effects.some(fx => fx.type === "impact" && fx.target === e && fx.id === skill && fx.max - fx.life < .065)) {
+  if (!ultimate) spark(e.x, chest - 8, "#ffe39b", 8);
+  if (!ultimate && !effects.some(fx => fx.type === "impact" && fx.target === e && fx.id === skill && fx.max - fx.life < .065)) {
     if (skill < 0) playEffect("hit");
     else if (!skillSounds[skill].onGround) playEffect(skillSounds[skill].impact);
     combatEvent("impact", e.x, chest, .36, { id: skill, dir, target: e });
     const heavy = skill === 0 || skill === 2 || skill === 7;
     if (!quietCombat()) contactPause = Math.max(contactPause, heavy ? .034 : skill < 0 ? .012 : 0);
   }
-  shake = Math.max(shake, 2);
+  if (!ultimate) shake = Math.max(shake, 2);
   if (wasAboveHalf && e.hp > 0 && bossPhase(e) === 2) {
     combatEvent("bossPhaseShift", e.x, e.y, .8, { kind: e.kind, height: e.height });
     if (!reducedMotion.matches) shake = Math.max(shake, 8);

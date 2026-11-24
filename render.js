@@ -549,8 +549,19 @@ function monsters() {
     let x = e.x - cam,
       bob = e.boss ? Math.sin(clock * 2) * 2 : 0,
       h = e.height;
+    if (e.warn > 0 && e.plan?.move.signature && !quietCombat()) {
+      const windup = bossWarningProgress(e);
+      const lean = 1 - (1 - windup) ** 2;
+      switch (e.kind) {
+        case 0: bob -= 17 * lean; break;
+        case 1: h += 13 * lean; break;
+        case 2: h -= 19 * lean; break;
+        case 3: h -= 12 * lean; break;
+        case 4: h += 11 * lean; bob -= 8 * lean; break;
+      }
+    }
     shadow(x, GROUND + 2, e.boss ? e.half * .92 : 10);
-    if (e.rush && !reducedMotion.matches) {
+    if (e.rush && !quietCombat()) {
       for (const trail of [3, 2, 1]) {
         g.globalAlpha = .27 / trail;
         drawActor("foe" + e.kind, 6, x - e.dir * trail * 17, e.y + bob, h, e.dir > 0);

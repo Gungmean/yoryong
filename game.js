@@ -753,7 +753,7 @@ function quiz(id) {
   function ask() {
     studyQuestion({ title: s[0], art: "scholar" + id,
       question: { prompt: s[4], choices: s[5], answer: s[6], hint: quizNotes[id] } }, () => {
-      dialogue(s[0], "scholar" + id, s[7] + "<br><br>" + lesson.note, "직접 풀어보기", practice);
+      dialogue(s[0], "scholar" + id, [s[7], ...lesson.note].join("<br><br>"), "직접 풀어보기", practice);
     });
   }
   dialogue(s[0], "scholar" + id, s[3], "질문 듣기", ask);

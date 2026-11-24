@@ -13,7 +13,9 @@
 
 학자에게 기본 개념을 확인한 뒤에는 실험 결과를 해석하는 응용 문제를 풉니다. 스킬과 함께 얻은 노트는 모험 일지(J)에서 다시 읽을 수 있습니다.
 
-생명과학 열쇠를 얻으려면 4층에서 어둠과 조명 아래의 완두를 비교하고, 발아 씨앗과 유리구슬 대조군의 산소 변화를 관찰합니다. 생명과학 보스와 옥상에서는 실험에서 배운 광합성과 세포 호흡을 응용합니다. [OpenStax의 광합성 명반응](https://openstax.org/books/biology-2e/pages/8-2-the-light-dependent-reactions-of-photosynthesis) · [OpenStax의 산화적 인산화](https://openstax.org/books/biology-2e/pages/7-4-oxidative-phosphorylation)
+모험 일지의 각 노트에 2022 개정 교육과정에서 관련된 과목을 표시합니다. 시간 팽창은 빛시계로 개념을 비교하고, 화학 문제는 반응식의 계수비와 이온 결합을 다룹니다. 해저 확장 속도 계산은 과학 계열 선택 과목인 **지구과학 실험**의 탐구를 바탕으로 구성했습니다. [교육부 고시 제2022-33호 별책 9·20](https://www.moe.go.kr/boardCnts/viewRenew.do?boardID=141&boardSeq=93458&lev=0&search=)
+
+생명과학 열쇠를 얻으려면 4층에서 어둠과 조명 아래의 완두를 비교하고, 발아 씨앗과 유리구슬 대조군의 산소 변화를 관찰합니다. 생명과학 보스와 옥상에서는 실험에서 배운 광합성과 세포호흡을 응용합니다. [OpenStax의 광합성 명반응](https://openstax.org/books/biology-2e/pages/8-2-the-light-dependent-reactions-of-photosynthesis) · [OpenStax의 산화적 인산화](https://openstax.org/books/biology-2e/pages/7-4-oxidative-phosphorylation)
 
 기본 공격과 장착 스킬로 체력 눈금까지 깎으면 보호막이 나타납니다. 과목 보스의 눈금은 72%와 35%, 옥상 보스는 80%, 60%, 38%, 18%입니다. 보호막마다 전장이 평소 속도의 7%까지 느려지고, 전장 위에 관측 문제와 16초 제한시간이 나타납니다. 숫자 1·2·3 또는 터치로 답하세요. 오답을 고르면 힌트와 함께 3초가 줄어듭니다. 시간이 다 되면 보스가 다시 공격하고, 약 4초 뒤에 같은 문제에 다시 도전할 수 있습니다.
 

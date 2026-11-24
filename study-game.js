@@ -2,7 +2,8 @@
 
 function lessonEntry(id) {
   const lesson = scienceLessons[id];
-  return `<details class="lesson-entry"><summary>${scholars[id][0]}의 노트 · ${lesson.topic}</summary><p>${lesson.note}</p></details>`;
+  return `<details class="lesson-entry"><summary>${scholars[id][0]}의 노트 · ${lesson.topic}</summary>
+    <p class="small">${lesson.curriculum}</p>${lesson.note.map(paragraph => `<p>${paragraph}</p>`).join("")}</details>`;
 }
 
 function studyQuestion({ title, art, question, lessonId }, onCorrect) {

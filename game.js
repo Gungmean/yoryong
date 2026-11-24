@@ -21,6 +21,7 @@ let player = {
   y: GROUND,
   vy: 0,
   vx: 0,
+  gravityVX: 0,
   face: 1,
   jumps: 0,
   dash: 0,
@@ -1044,6 +1045,7 @@ function setScene() {
     y: GROUND,
     vy: 0,
     vx: 0,
+    gravityVX: 0,
     jumps: 0,
     dash: 0,
     inv: 0,
@@ -1401,10 +1403,11 @@ function step(dt) {
   if (!reading) cool = cool.map((n) => Math.max(0, n - dt));
   shake = Math.max(0, shake - dt * 12);
   if (!reading) mp = Math.min(60, mp + dt * 2.5);
-  let axis = Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
+  const axis = Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
   if (axis && p.dash <= 0) p.face = axis;
   const oldX = p.x;
-  p.vx = p.dash > 0 ? p.face * 420 : axis * 158;
+  p.gravityVX = gravityDrift(p, dt, reading);
+  p.vx = p.dash > 0 ? p.face * 420 : axis * 158 + p.gravityVX;
   p.x = clamp(p.x + p.vx * dt, 17, worldWidth - 17);
   p.coyote = p.grounded ? 0.09 : Math.max(0, p.coyote - dt);
   p.drop = Math.max(0, p.drop - dt);
@@ -1507,6 +1510,12 @@ function step(dt) {
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     if (s.team) {
+      if (s.mirror && s.vy > 0 && s.y >= s.mirror.y) {
+        s.y = 2 * s.mirror.y - s.y;
+        s.vy = -s.vy;
+        combatEvent("enemyImpact", s.mirror.x, s.mirror.y, .32, {id:s.id, rift:true, dir:Math.sign(s.vx)});
+        playEffect("impactOrbit", .64);
+      }
       const contact = Math.abs(s.x - p.x) < (s.rx ?? 21) && Math.abs(s.y - (p.y - 23)) < (s.ry ?? 24);
       if (contact || s.y > GROUND) {
         if (contact) hurt(s.dmg);
@@ -1586,6 +1595,8 @@ function press(code, repeat = false) {
     player.buffer = 0.11;
   if (code === "ShiftLeft" || code === "ShiftRight") {
     if (player.dashCD <= 0) {
+      const direction = Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
+      player.face = direction || player.face;
       player.dash = 0.19;
       player.inv = 0.25;
       player.dashCD = 0.75;

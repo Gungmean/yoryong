@@ -173,10 +173,17 @@ function entranceLight(x, y, time) {
 }
 
 function warningPath(e) {
-  const { move, dir, start, end, strikes } = e.plan;
+  const { move, dir, start, end, strikes, mirror } = e.plan;
   const color = e.kind === 4 ? "#edadff" : subjects[move.id].color;
   const t = bossWarningProgress(e);
-  for (const zone of strikes) drawBossZone({ ...zone, id: move.id, rift: e.kind === 4 }, true, t);
+  if (mirror) {
+    drawMirrorCourse(mirror, dir);
+    return;
+  }
+  for (const zone of strikes) {
+    // Both phases of the solid-ground wave have the same footprint.
+    if (zone.wave !== "S") drawBossZone({...zone, id:move.id, rift:e.kind === 4}, true, t);
+  }
   if (move.dash) {
     warningLane(start - cam - dir * e.half * .56, end - cam + dir * e.half * .56, GROUND - 20, color, t, 19);
     return;
@@ -207,6 +214,48 @@ function warningLane(from, to, y, color, t, halfHeight = 15) {
 
 const bossSpriteColors = ["#89defc", "#efb2f7", "#b4ec88", "#ffac6c", "#edafff"];
 
+function drawGravityField(zone, progress, warning) {
+  const x = zone.x - cam, y = GROUND - 60;
+  const frame = quietCombat() ? 3 : Math.floor(progress * 8);
+  const opacity = warning ? .64 : .95;
+  bossStamp(20, frame, x, y, 58, 57, false, opacity);
+  for (const side of [-1, 1]) for (const distance of [46, 79, 109]) {
+    const size = 35 - distance * .16;
+    bossStamp(30, frame, x + side * distance, y, size, size, side > 0, opacity);
+  }
+  if (x >= 22 && x <= W - 22) label("끌림", x, y - 31, "#cdefff", "#253d52", 8);
+}
+
+function drawSeismicBed(plan) {
+  const left = Math.max(0, Math.min(plan.liquidX, plan.liquidEnd) - cam);
+  const right = Math.min(W, Math.max(plan.liquidX, plan.liquidEnd) - cam);
+  if (right - left < 4) return;
+  r(left, GROUND + 1, right - left, 13, "#35627caa");
+  r(left, GROUND + 1, right - left, 2, "#a5e9f4");
+  if (right - left >= 44) label("액체층", clamp(plan.liquidX - cam + plan.dir * 37, left + 22, right - 22), GROUND + 21, "#d6faff", "#25465b", 8);
+}
+
+function drawBattleMirror(mirror) {
+  const x = mirror.x - cam;
+  r(x - 19, mirror.y + 1, 38, 6, "#685485");
+  r(x - 19, mirror.y, 38, 2, "#e6f9ff");
+  if (x >= 22 && x <= W - 22) label("거울", x, GROUND + 21, "#d8faff", "#493461", 8);
+}
+
+function drawMirrorCourse(mirror, dir) {
+  const x = mirror.x - cam, y = mirror.y;
+  const start = [x - dir * mirror.span, y - mirror.span];
+  const end = [x + dir * mirror.span, y - mirror.span];
+  g.save();
+  g.setLineDash([5, 6]);
+  fxLine([start, [x, y]], "#ace8ff", 3);
+  fxLine([[x, y], end], "#ffd2ff", 3);
+  g.setLineDash([2, 4]);
+  fxLine([[x, y - 48], [x, y]], "#eee6c7", 1);
+  g.restore();
+  drawBattleMirror(mirror);
+}
+
 function bossStamp(row, frame, x, y, width, height, flip = false, alpha = 1) {
   const sheet = assets.bossMotion;
   if (!sheet.naturalWidth || x + width / 2 < 0 || x - width / 2 > W || alpha <= 0) return;
@@ -221,20 +270,27 @@ function bossStamp(row, frame, x, y, width, height, flip = false, alpha = 1) {
 function drawBossZone(zone, warning, t) {
   const x = zone.x - cam, y = GROUND, width = zone.radius * 2;
   if (x + zone.radius < -10 || x - zone.radius > W + 10) return;
+  if (zone.field) {
+    drawGravityField(zone, warning ? t : zone.timer / zone.linger, warning);
+    return;
+  }
   const left = x - zone.radius, right = x + zone.radius, top = y - zone.height;
   const kind = zone.rift ? 4 : zone.id;
-  const color = bossSpriteColors[kind];
+  const color = zone.wave === "P" ? "#b2eaff" : zone.wave === "S" ? "#ffb872" : bossSpriteColors[kind];
   const row = kind * 4 + (zone.height <= 43 ? 2 : 0) + Number(!warning);
   const progress = warning ? t : clamp(zone.timer / zone.linger, 0, 1);
   const frame = quietCombat() ? (warning ? 3 : 2) : Math.min(7, Math.floor(progress * 8));
   const opacity = warning ? .66 : Math.min(1, (zone.linger - zone.timer) * 12);
-  if (warning) r(left, top, width, zone.height, "#ad554a47");
-  bossStamp(row, frame, x, top + zone.height / 2, width, zone.height, false, opacity);
+  if (warning) r(left, top, width, zone.height, zone.lit ? "#b79b5444" : "#ad554a47");
+  if (!warning || !zone.marker) bossStamp(row, frame, x, top + zone.height / 2, width, zone.height, false, opacity);
   // These marks use the exact same bounds as collision.
   r(left, top, 1, zone.height, warning ? "#ffc69f" : color);
   r(right - 1, top, 1, zone.height, warning ? "#ffc69f" : color);
   r(left, y - 3, width, 3, color);
-  if (warning && zone.beat) {
+  if ((warning && zone.marker) || (!warning && zone.wave)) {
+    const text = warning ? zone.marker : zone.wave + "파";
+    if (x >= 17 && x <= W - 17) label(text, x, Math.min(top - 17, GROUND - 86), color, "#30283c", 8);
+  } else if (warning && zone.beat) {
     const tagX = left + 11, tagY = top - 14;
     r(tagX - 9, tagY, 18, 15, "#281c31");
     r(tagX - 9, tagY, 18, 2, color);

@@ -639,15 +639,20 @@ function friendlyEffects() {
 }
 function threatEffects() {
   // Threat outlines and enemy cores sit over the player and friendly effects.
-  for (const e of foes) if (e.boss && e.warn > 0) {
-    bossCharge(e);
-    warningPath(e);
+  for (const e of foes) if (e.boss && e.plan) {
+    if (e.plan.liquidX != null && (e.warn > 0 || bossZones.some(zone => zone.wave))) drawSeismicBed(e.plan);
+    if (e.warn > 0) {
+      bossCharge(e);
+      warningPath(e);
+    }
   }
   for (const zone of bossZones) {
+    if (zone.timer < 0 && zone.wave === "S" && bossZones.some(p => p.wave === "P" && p.x === zone.x)) continue;
     drawBossZone(zone, zone.timer < 0, zone.timer < 0 ? 1 + zone.timer / zone.delay : 1);
   }
   for (const s of shots) {
     if (!s.team) continue;
+    if (s.mirror) drawBattleMirror(s.mirror);
     drawCombatShot(s);
   }
   for (let t of texts) {

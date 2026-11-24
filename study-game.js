@@ -146,7 +146,7 @@ function showScholarCutIn(id) {
   cutIn.dataset.technique = id;
   cutIn.style.setProperty("--cut-in-color", color);
   cutIn.style.setProperty("--cut-in-face", face);
-  cutIn.style.setProperty("--cut-in-bed", cutInThemes[id].bed);
+  cutIn.style.setProperty("--cut-in-bed", cutInBeds[id]);
   cutIn.style.setProperty("--cut-in-engraving", id);
   cutIn.toggleAttribute("data-quiet", quietCombat());
   cutInRemaining = .94;

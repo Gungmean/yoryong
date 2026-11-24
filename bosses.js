@@ -121,7 +121,7 @@ function launchBossBolts(e, dt) {
     playEffect(bossBoltSounds[id]);
     shots.push({
       team: 1, rift: e.kind === 4, id, x: e.x + aim * bossStats[e.kind].half * .72,
-      y: GROUND - height, vx: aim * speed, vy: 0, rx: 24, ry: 15, scale: 1.24,
+      y: GROUND - height, vx: aim * speed, vy: 0, rx: 24, ry: 15,
       life: 4.8, dmg: e.kind === 4 ? 16 : 12,
     });
   }

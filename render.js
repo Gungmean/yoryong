@@ -648,7 +648,6 @@ function threatEffects() {
   }
   for (const s of shots) {
     if (!s.team) continue;
-    if (!s.vx) warningMark(s.x - cam, 1, subjects[s.id].color);
     drawCombatShot(s);
   }
   for (let t of texts) {

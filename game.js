@@ -114,8 +114,12 @@ assets.classrooms = new Image();
 assets.classrooms.src = classroomAtlasURL;
 assets.combat = new Image();
 assets.combat.src = "assets/combat/effects.webp";
-assets.ultimate = new Image();
-assets.ultimate.src = "assets/combat/ward-techniques.png";
+for (const [name, file] of Object.entries({
+  wardMotionA: "finishers-a", wardMotionB: "finishers-b", bossMotion: "boss-attacks", cutInMotion: "cut-in-strips",
+})) {
+  assets[name] = new Image();
+  assets[name].src = `assets/combat/${file}.webp`;
+}
 assets.summons = new Image();
 assets.summons.src = "assets/actors/summons.png";
 assets.spellFX = new Image();
@@ -1495,7 +1499,7 @@ function step(dt) {
       }
     }
     // Sample world positions before movement so trails follow turns, camera motion and falling shots.
-    if (!quietCombat() && s.id !== 6 && (!s.trail || Math.floor(s.age * 25) !== Math.floor((s.age - dt) * 25))) {
+    if (!s.team && !quietCombat() && s.id !== 6 && (!s.trail || Math.floor(s.age * 25) !== Math.floor((s.age - dt) * 25))) {
       s.trail ??= [];
       s.trail.unshift({ x: s.x, y: s.y, flip: s.vx < 0 });
       if (s.trail.length > 8) s.trail.pop();

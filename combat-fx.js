@@ -4,8 +4,7 @@
 const spellLight = ["#ffac59", "#65ddff", "#ffdc76", "#de99ff", "#a6ee73", "#ffe684", "#ffa15b", "#ffc876"];
 const FX_CLAW = 12,
   FX_DASH = 13,
-  FX_BURST = 14,
-  FX_RIFT = 15;
+  FX_BURST = 14;
 
 function combatEvent(type, x, y, seconds, details = {}) {
   effects.push({ type, x, y, max: seconds, life: seconds, ...details });
@@ -23,8 +22,6 @@ const scholarHits = [
   { clip: "gravity", size: .6, dy: 16 },
   { clip: "gravity", size: .72, dy: 9 },
 ];
-const bossHits = ["field", "flask", "thicket", "meteor"];
-const bossWakes = ["orbit", "bubbles", "vine", "ember"];
 const scholarWakes = ["apple", "orbit", "bubbles", "prism", "vine", "wings"];
 
 // The atlas keeps the pivot of each simulation. A narrow particle cell can have its pivot outside the cell.
@@ -46,9 +43,10 @@ function spellClip(name, t, x, y, scale = 1, alpha = 1, flip = false) {
 
 // Leaves, molecules and orbital rings use the local flight direction so even a turning swarm keeps its wake.
 function spellWake(s) {
-  if (!s.trail?.length || reducedMotion.matches || s.x - cam < -140 || s.x - cam > W + 140) return;
-  const motif = (s.team ? bossWakes : scholarWakes)[s.id];
-  const color = s.team ? subjects[s.id].color : spellLight[s.id];
+  if (s.team || !s.trail?.length || quietCombat() || s.x - cam < -140 || s.x - cam > W + 140) return;
+  const motif = scholarWakes[s.id];
+  if (!motif) return;
+  const color = spellLight[s.id];
   g.save();
   let front = s;
   for (let i = 0; i < s.trail.length; i++) {
@@ -85,9 +83,6 @@ function spellWake(s) {
       fxLine([[3, bend], [-8 - strength * 4, bend * 1.4]], i % 2 ? "#ff9354" : "#ffcc73", 2);
       r(-6, -bend, 2, 3, "#ffe3a1");
     }
-    if (s.rift && i % 2) {
-      path([[0, -11], [3, -7], [0, -3], [-2, -7]], "#e0adff");
-    }
     g.restore();
   }
   g.restore();
@@ -95,17 +90,9 @@ function spellWake(s) {
 
 function bossCharge(e) {
   const id = e.plan.move.id, t = bossWarningProgress(e);
-  const x = e.x - cam, dir = e.plan.dir, scale = e.height / 116;
-  const still = reducedMotion.matches;
-  if (e.kind === 4) spellClip("riftCharge", t, x + dir * 66, e.y - e.height * .62, 1.17, .92);
-  // Collect small copies of the actual attack core around the hand just before release.
-  const handX = x + dir * e.half * .72, handY = e.y - (id === 2 ? 18 : e.height * .40);
-  combatSprite(8 + id, still ? 2 : Math.floor(t * 8), handX, handY, scale * (.22 + .28 * t), dir < 0, .52 + .42 * t);
-  if (still) return;
-  for (let i = 0; i < 6; i++) {
-    const a = i * Math.PI / 3 + t * 2, dist = 9 + 28 * (1 - t);
-    star(handX + Math.cos(a) * dist, handY + Math.sin(a) * dist * .7, 1 + 2 * t, subjects[id].color);
-  }
+  const dir = e.plan.dir, size = e.height * (.24 + .20 * t);
+  const x = e.x - cam + dir * e.half * .72, y = e.y - (id === 2 ? 24 : e.height * .46);
+  bossStamp(20 + (e.kind === 4 ? 4 : id), quietCombat() ? 3 : Math.floor(t * 8), x, y, size, size, dir < 0, .84);
 }
 
 function combatSprite(row, frame, x, y, scale = 1, flip = false, alpha = 1, scaleY = scale) {
@@ -165,51 +152,6 @@ function splinters(x, y, t, radius, color, count = 9, lift = 0.68) {
   }
 }
 
-function warningMark(x, t, color) {
-  if (x < -45 || x > W + 45) return;
-  const y = GROUND - 2,
-    spread = 21;
-  g.save();
-  g.globalAlpha = 0.15;
-  path(
-    [
-      [x - 11, y - 87],
-      [x + 11, y - 87],
-      [x + spread, y - 2],
-      [x - spread, y - 2],
-    ],
-    "#ff8d72",
-  );
-  g.globalAlpha = 0.87;
-  fxArc(x, y, spread, 6, "#482c36", 0, Math.PI * 2, 5);
-  fxArc(x, y, spread, 6, "#ffa078", 0, Math.PI * 2, 3);
-  fxArc(x, y, spread - 3, 4, color);
-  for (const side of [-1, 1]) {
-    const edge = x + side * spread;
-    fxLine(
-      [
-        [edge + side * 6, y - 5],
-        [edge, y],
-        [edge + side * 6, y + 4],
-      ],
-      "#fff0bc",
-      2,
-    );
-  }
-  g.globalAlpha = 0.95;
-  const drop = reducedMotion.matches ? 0 : 11 * (1 - t);
-  for (const dy of [20, 30]) {
-    const arrow = [
-      [x - 5, y - dy - drop],
-      [x, y - dy + 5 - drop],
-      [x + 5, y - dy - drop],
-    ];
-    fxLine(arrow, "#553142", 5);
-    fxLine(arrow, "#fff1c3", 2);
-  }
-  g.restore();
-}
-
 function entranceLight(x, y, time) {
   if (x < -52 || x > W + 52) return;
   g.save();
@@ -255,162 +197,49 @@ function warningLane(from, to, y, color, t, halfHeight = 15) {
   const first = Math.max(-14, Math.min(from, to));
   const last = Math.min(W + 14, Math.max(from, to));
   if (!side || first >= last) return;
-  g.save();
-  g.globalAlpha = .61 + t * .2;
-  r(first, y - halfHeight, last - first, halfHeight * 2, "#7c3b4938");
-  fxLine([[first, y], [last, y]], "#402535", 5);
-  fxLine([[first, y], [last, y]], color, 2);
-  for (let x = first + 19; x < last - 7; x += 42) {
-    const px = x + (reducedMotion.matches ? 0 : side * t * 10);
-    const arrow = [[px - side * 6, y - 5], [px, y], [px - side * 6, y + 5]];
-    fxLine(arrow, "#251e31", 5);
-    fxLine(arrow, "#fff0c1", 2);
-  }
-  g.restore();
+  r(first, y - halfHeight, last - first, halfHeight * 2, "#7c3b494c");
+  r(first, y - halfHeight, last - first, 1, color);
+  r(first, y + halfHeight - 1, last - first, 1, color);
+  const frame = quietCombat() ? 3 : Math.min(7, Math.floor(t * 8));
+  for (let x = first + 18; x < last - 7; x += 38)
+    bossStamp(30, frame, x, y, 31, 29, side < 0, .84);
 }
 
-const signatureColors = ["#89defc", "#f4cd6c", "#b4ec88", "#ffac6c", "#edafff"];
+const bossSpriteColors = ["#89defc", "#efb2f7", "#b4ec88", "#ffac6c", "#edafff"];
 
-function drawSignatureZone(zone, warning, t) {
-  const {radius:span, height, id, rift} = zone;
-  const x = zone.x - cam, y = GROUND, top = y - height;
-  const left = x - span, right = x + span;
-  const color = signatureColors[rift ? 4 : id];
-  const age = Math.max(0, zone.timer || 0);
-  const fade = warning ? 1 : Math.min(1, (zone.linger - age) * 8);
-  const motion = quietCombat() ? .52 : warning ? t : age;
+function bossStamp(row, frame, x, y, width, height, flip = false, alpha = 1) {
+  const sheet = assets.bossMotion;
+  if (!sheet.naturalWidth || x + width / 2 < 0 || x - width / 2 > W || alpha <= 0) return;
+  const cell = 80;
   g.save();
-  g.globalAlpha *= fade;
-  r(left, top, span * 2, height, warning ? "#aa4b4b47" : "#492e4b81");
-  r(left, top, 2, height, warning ? "#ffbc9b" : color);
-  r(right - 2, top, 2, height, warning ? "#ffbc9b" : color);
-  r(left, y - 4, span * 2, 4, color);
-  for (let px = left + 4; px < right - 6; px += 12) r(px, y - 7, 6, 2, "#fff2cb");
-  g.save();
-  g.beginPath();
-  g.rect(left, top, span * 2, height);
-  g.clip();
-  g.globalAlpha *= warning ? .68 : .95;
-  if (rift) {
-    // The roof's breath has overlapping scale silhouettes, even close to the floor.
-    for (let i = 0; i < 7; i++) {
-      const py = top + ((i * height / 5 + motion * 90) % height);
-      const depth = Math.min(22, height * .4);
-      path([[left, py - depth], [x, py + depth], [right, py - depth], [right, py], [x, py + depth * 1.6], [left, py]], "#8f4aaf");
-      fxLine([[left, py - depth], [x, py + depth], [right, py - depth]], color, warning ? 2 : 4);
-    }
-  } else if (id === 0) {
-    const cy = top + height * .46;
-    for (let i = 0; i < 4; i++) {
-      const scale = .26 + ((i * .23 + 1 - motion * .69) % .67);
-      fxArc(x, cy, span * scale, height * .50 * scale, i === 1 ? "#e1fcff" : color, 0, Math.PI * 2, i === 1 ? 3 : 2);
-    }
-    fxLine([[x, top + 9], [x, y - 12]], "#8cb4f3", 1);
-    star(x, cy, warning ? 6 : 12, "#dafaef");
-  } else if (id === 1) {
-    const fill = warning ? Math.max(4, t * height * .58) : height * .78;
-    r(left, y - fill, span * 2, fill, "#a86831");
-    r(left, y - fill, span * 2, 3, color);
-    for (let i = 0; i < 11; i++) {
-      const py = y - 3 - ((i * 11 + motion * 42) % Math.max(5, fill));
-      const px = left + 9 + i * (span * 2 - 18) / 11;
-      fxArc(px, py, 2 + i % 4, 2 + i % 3, i % 3 ? color : "#fff5ad");
-    }
-  } else if (id === 2) {
-    for (let i = -1; i <= 1; i++) {
-      const rise = height * (.58 + .13 * (i + 1)) * (warning ? .67 : Math.min(1.18, .78 + motion * 2));
-      const px = x + i * span * .49;
-      const branch = [[px, y], [px + i * 9, y - rise * .36], [px - i * 7, y - rise * .66], [px + i * 11, y - rise]];
-      fxLine(branch, "#395939", 10);
-      fxLine(branch, color, 3);
-      for (const [bx, by] of branch.slice(1)) {
-        const side = i || 1;
-        path([[bx, by], [bx + side * 13, by - 13], [bx + side * 20, by - 14], [bx + side * 13, by - 2]], "#e6df90");
-      }
-    }
-  } else {
-    const crest = y - height * (warning ? .60 : .96);
-    const crack = [[left, y - 6], [x - span * .55, crest + 10], [x - 7, y - 12], [x + 8, crest], [right, y - 9]];
-    path([...crack, [right, y], [left, y]], "#804e46");
-    fxLine(crack, color, warning ? 2 : 5);
-    fxLine(crack.map(([px, py]) => [px, py + 5]), "#e88057", 2);
-    if (!warning) for (let i = 0; i < 9; i++) {
-      const px = left + 5 + i * span * .21;
-      const py = y - 8 - (i * 11 % 24) - motion * 32;
-      r(px, py, 3 + i % 4, 2 + i % 3, i % 2 ? color : "#fff2ac");
-    }
-  }
-  g.restore();
-  if (warning && zone.beat) {
-    const tagX = left + 11, tagY = top - 14;
-    r(tagX - 9, tagY, 18, 15, "#281c31");
-    r(tagX - 9, tagY, 18, 2, color);
-    word(String(zone.beat), tagX, tagY + 8, 10, "#fff4d9");
-  }
+  g.globalAlpha *= alpha;
+  drawFieldCell(sheet, (frame & 7) * cell, row * cell, cell, cell, cell / 2, cell / 2,
+    x, y, width / cell, height / cell, flip);
   g.restore();
 }
 
 function drawBossZone(zone, warning, t) {
   const x = zone.x - cam, y = GROUND, width = zone.radius * 2;
   if (x + zone.radius < -10 || x - zone.radius > W + 10) return;
-  if (zone.signature) {
-    drawSignatureZone(zone, warning, t);
-    return;
-  }
   const left = x - zone.radius, right = x + zone.radius, top = y - zone.height;
-  const color = zone.rift ? "#e493ff" : subjects[zone.id].color;
-  g.save();
-  if (warning) {
-    r(left, top, width, zone.height, "#e5686235");
-    r(left, top, 1, zone.height, "#f3a68d");
-    r(right - 1, top, 1, zone.height, "#f3a68d");
-    r(left, y - 9, width, 10, "#612b3c");
-    for (let dx = 2; dx < width - 2; dx += 9) r(left + dx, y - 6, 5, 3, "#ffb28e");
-    if (zone.height > 45) {
-      warningMark(x, t, color);
-      const arrow = [[x - 6, top + 8], [x, top + 15], [x + 6, top + 8]];
-      fxLine(arrow, "#41283d", 5);
-      fxLine(arrow, "#ffe0b7", 2);
-    }
-    if ((zone.id === 1 || zone.id === 3) && zone.height > 100 && t > .65) {
-      const falling = (t - .65) / .35;
-      const targetY = reducedMotion.matches ? top + 14 : top + (zone.height - 15) * falling ** 2;
-      combatSprite(8 + zone.id, 2, x, targetY, .66 + zone.radius / 200, false, .62);
-    }
-    g.restore();
-    return;
+  const kind = zone.rift ? 4 : zone.id;
+  const color = bossSpriteColors[kind];
+  const row = kind * 4 + (zone.height <= 43 ? 2 : 0) + Number(!warning);
+  const progress = warning ? t : clamp(zone.timer / zone.linger, 0, 1);
+  const frame = quietCombat() ? (warning ? 3 : 2) : Math.min(7, Math.floor(progress * 8));
+  const opacity = warning ? .66 : Math.min(1, (zone.linger - zone.timer) * 12);
+  if (warning) r(left, top, width, zone.height, "#ad554a47");
+  bossStamp(row, frame, x, top + zone.height / 2, width, zone.height, false, opacity);
+  // These marks use the exact same bounds as collision.
+  r(left, top, 1, zone.height, warning ? "#ffc69f" : color);
+  r(right - 1, top, 1, zone.height, warning ? "#ffc69f" : color);
+  r(left, y - 3, width, 3, color);
+  if (warning && zone.beat) {
+    const tagX = left + 11, tagY = top - 14;
+    r(tagX - 9, tagY, 18, 15, "#281c31");
+    r(tagX - 9, tagY, 18, 2, color);
+    word(String(zone.beat), tagX, tagY + 8, 10, "#fff4d9");
   }
-  const age = zone.timer;
-  const impact = clamp(age / .24, 0, 1);
-  const fade = Math.min(1, (zone.linger - age) * 9);
-  if (zone.height > 42) {
-    g.globalAlpha = fade * .27;
-    r(left, top, width, zone.height, color);
-    g.globalAlpha = fade * .9;
-    // The column's edges are the hit edges. The drawn matter inside varies by subject.
-    r(left, top, 3, zone.height, color);
-    r(right - 3, top, 3, zone.height, color);
-    for (let i = 0; i < 4; i++) {
-      const cx = left + (i + .5) * width / 4;
-      const cy = top + ((i * 43 + (reducedMotion.matches ? 12 : impact * 90)) % zone.height);
-      combatSprite(8 + zone.id, 3 + i, cx, cy, .64 + zone.radius / 180, i % 2 > 0, .88);
-    }
-    spellClip(bossHits[zone.id], impact, x, y - zone.height * (zone.id === 2 ? .17 : .42), Math.min(1.3, .68 + zone.radius / 168), .67);
-  } else {
-    g.globalAlpha = fade * .54;
-    r(left, top, width, zone.height, color);
-    for (let i = 0; i < width; i += 18) {
-      const rise = 7 + (i * 13 % 15);
-      if (zone.id === 1) fxArc(left + i, y - 6 - rise / 3, 4, 3 + rise / 6, color);
-      else path([[left + i, y - 3], [left + i + 3, y - rise], [left + i + 8, y - 8]], color);
-    }
-  }
-  g.globalAlpha = fade;
-  r(left, y - 4, width, 4, color);
-  const release = zone.rift ? "riftBurst" : bossHits[zone.id];
-  spellClip(release, impact, x, y - 4, Math.min(1.65, .7 + zone.radius / 120), fade);
-  if (!reducedMotion.matches && age < .3) splinters(x, y - 9, impact, zone.radius, color, 12);
-  g.restore();
 }
 
 function groundWave(e, x, y, t) {
@@ -489,22 +318,13 @@ function drawCombatGround() {
     if (x < -260 || x > W + 260) continue;
     if (e.type === "wave") groundWave(e, x, y, t);
     if (e.type === "bossRelease") {
-      const flip = e.dir < 0, alpha = Math.min(1, e.life * 6);
-      if (e.rift) spellClip("riftBurst", t * .7, x, y - 95, .7 * e.scale, alpha * .8);
-      spellClip(disciplineSeals[e.id], .48 + .5 * t, x, y, e.scale + .24 * t, alpha * .78);
-      // Recoil happens at the caster. Falling attacks keep a separate marker at the landing site.
-      if (!reducedMotion.matches) splinters(x + e.dir * 27, y - (e.id === 2 ? 15 : 46), t, 48, subjects[e.id].color);
-      if (e.id === 0) spellClip("space", t, x + e.dir * 34, y - 30, .72, alpha, flip);
+      const size = 64 * e.scale;
+      bossStamp(25 + (e.rift ? 4 : e.id), quietCombat() ? 3 : Math.floor(t * 8), x + e.dir * 33,
+        y - (e.id === 2 ? 20 : 51), size, size, e.dir < 0, Math.min(1, e.life * 6));
     }
     if (e.type === "bossPhaseShift") {
-      const color = subjects[e.kind].color;
-      const crest = y - e.height * .45;
-      g.save();
-      g.globalAlpha = .77 * (1 - t);
-      fxArc(x, crest, 39 + t * 142, 24 + t * 78, color, 0, Math.PI * 2, 3);
-      fxArc(x, crest, 31 + t * 111, 17 + t * 59, "#fff1d3");
-      if (!reducedMotion.matches) splinters(x, crest, t, 147, color, 20);
-      g.restore();
+      bossStamp(25 + e.kind, quietCombat() ? 3 : Math.floor(t * 8), x, y - e.height * .47,
+        e.height * 1.46, e.height, false, .77 * (1 - t));
     }
     if (e.type === "discovery") {
       const lift = 20 * (1 - (1 - t) ** 2), opacity = Math.min(1, (1 - t) * 3);
@@ -585,8 +405,7 @@ function drawCombatShot(s) {
   const frame = staticPose ? 2 : Math.floor(age * 16) + (s.lane || 0) * 2;
   if (x < -170 || x > W + 170) return;
   if (s.team) {
-    if (s.rift) combatSprite(FX_RIFT, frame, x, y, s.id === 1 || s.id === 3 ? 0.51 : 0.6, false, 0.65);
-    combatSprite(8 + s.id, frame, x, y, s.scale ?? 1, s.vx < 0);
+    bossStamp(20 + (s.rift ? 4 : s.id), frame, x, y, s.rx * 3, s.ry * 3.6, s.vx < 0);
     return;
   }
   const flip = s.vx ? s.vx < 0 : !s.area && s.dir < 0;
@@ -630,27 +449,27 @@ function drawCombatAccent(e) {
   } else if (e.type === "impact" || e.type === "hurt" || e.type === "enemyImpact") {
     const hurt = e.type === "hurt",
       enemy = e.type === "enemyImpact";
-    const color = hurt ? "#ff997e" : enemy ? subjects[e.id].color : spellLight[e.id] || "#ffd282";
-    const scale = hurt ? 0.68 : enemy ? 0.75 : e.id >= 0 ? 0.89 : 0.71;
+    if (enemy) {
+      bossStamp(25 + (e.rift ? 4 : e.id), frame, x, y, 72, 63, e.dir < 0, fade);
+      return;
+    }
+    const color = hurt ? "#ff997e" : spellLight[e.id] || "#ffd282";
+    const scale = hurt ? 0.68 : e.id >= 0 ? 0.89 : 0.71;
     g.save();
     g.globalAlpha = fade;
-    if (enemy && e.rift) spellClip("riftBurst", t, x, y, .57, .88);
-    if (!enemy && e.id === 1) {
+    if (e.id === 1) {
       fxArc(x, y, 8 + 26 * t, 18 + 31 * t, "#85e8ff", 0, Math.PI * 2, 3);
       fxArc(x, y, 5 + 14 * t, 12 + 28 * t, "#f3ffff");
-    } else if (!enemy && e.id === 3) {
+    } else if (e.id === 3) {
       for (const side of [-1, 1]) combatSprite(3, frame, x + side * (9 + 40 * t), y - 12 * t, 0.5, side < 0);
-    } else if (!enemy && e.id === 5) {
+    } else if (e.id === 5) {
       for (const side of [-1, 1])
         combatSprite(5, frame + side, x + side * (8 + 30 * t), y - 34 * t, 0.43, side < 0);
     }
     g.restore();
     // Keep the common contact flash short so the individual material reads on the follow-through.
-    combatSprite(FX_BURST, frame, x, y, scale * (enemy || e.id >= 0 ? .63 : .87), false, fade * Math.max(0, 1 - t * 2));
-    if (enemy) {
-      const size = [.92, 1.3, .64, .82][e.id];
-      spellClip(bossHits[e.id], t, x, y + (e.id === 0 ? 12 : 0), size, fade, e.id === 2 && e.dir > 0);
-    } else if (e.id >= 0) {
+    combatSprite(FX_BURST, frame, x, y, scale * (e.id >= 0 ? .63 : .87), false, fade * Math.max(0, 1 - t * 2));
+    if (e.id >= 0) {
       const contact = scholarHits[e.id];
       if (contact) spellClip(contact.clip, t, x, y + contact.dy, contact.size, fade, e.dir < 0);
       if (e.id === 7) fxArc(x, y, 7 + 31 * t, 5 + 13 * t, "#ffd586", Math.PI * .15, Math.PI * 1.82);

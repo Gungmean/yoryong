@@ -177,7 +177,7 @@ function warningPath(e) {
   const color = e.kind === 4 ? "#edadff" : subjects[move.id].color;
   const t = bossWarningProgress(e);
   if (mirror) {
-    drawMirrorCourse(mirror, dir);
+    drawMirrorCourse(mirror, dir, t);
     return;
   }
   for (const zone of strikes) {
@@ -216,9 +216,9 @@ const bossSpriteColors = ["#89defc", "#efb2f7", "#b4ec88", "#ffac6c", "#edafff"]
 
 function drawGravityField(zone, progress, warning) {
   const x = zone.x - cam, y = GROUND - 60;
-  const frame = quietCombat() ? 3 : Math.floor(progress * 8);
+  const frame = quietCombat() ? 3 : Math.min(7, Math.floor(progress * 8));
   const opacity = warning ? .64 : .95;
-  bossStamp(20, frame, x, y, 58, 57, false, opacity);
+  if (!assets.scienceFX.naturalWidth) bossStamp(20, frame, x, y, 58, 57, false, opacity);
   for (const side of [-1, 1]) for (const distance of [46, 79, 109]) {
     const size = 35 - distance * .16;
     bossStamp(30, frame, x + side * distance, y, size, size, side > 0, opacity);
@@ -235,25 +235,33 @@ function drawSeismicBed(plan) {
   if (right - left >= 44) label("액체층", clamp(plan.liquidX - cam + plan.dir * 37, left + 22, right - 22), GROUND + 21, "#d6faff", "#25465b", 8);
 }
 
-function drawBattleMirror(mirror) {
+function drawBattleMirror(mirror, frame) {
   const x = mirror.x - cam;
-  r(x - 19, mirror.y + 1, 38, 6, "#685485");
-  r(x - 19, mirror.y, 38, 2, "#e6f9ff");
+  if (!scienceStamp("mirror", quietCombat() ? 3 : frame, x, mirror.y, 1, 1)) {
+    r(x - 19, mirror.y + 1, 38, 6, "#685485");
+    r(x - 19, mirror.y, 38, 2, "#e6f9ff");
+  }
   if (x >= 22 && x <= W - 22) label("거울", x, GROUND + 21, "#d8faff", "#493461", 8);
 }
 
-function drawMirrorCourse(mirror, dir) {
+function drawMirrorCourse(mirror, dir, progress) {
   const x = mirror.x - cam, y = mirror.y;
   const start = [x - dir * mirror.span, y - mirror.span];
   const end = [x + dir * mirror.span, y - mirror.span];
   g.save();
   g.setLineDash([5, 6]);
+  fxLine([start, [x, y], end], "#291f427c", 7);
   fxLine([start, [x, y]], "#ace8ff", 3);
   fxLine([[x, y], end], "#ffd2ff", 3);
   g.setLineDash([2, 4]);
   fxLine([[x, y - 48], [x, y]], "#eee6c7", 1);
   g.restore();
-  drawBattleMirror(mirror);
+  if (!quietCombat()) {
+    const travel = (progress * 2 - 1) * mirror.span;
+    scienceStamp("moon", Math.floor(progress * 8), x + dir * travel, y - Math.abs(travel), .66, .66,
+      dir < 0, .70);
+  }
+  drawBattleMirror(mirror, Math.floor(progress * 8));
 }
 
 function bossStamp(row, frame, x, y, width, height, flip = false, alpha = 1) {
@@ -281,8 +289,16 @@ function drawBossZone(zone, warning, t) {
   const progress = warning ? t : clamp(zone.timer / zone.linger, 0, 1);
   const frame = quietCombat() ? (warning ? 3 : 2) : Math.min(7, Math.floor(progress * 8));
   const opacity = warning ? .66 : Math.min(1, (zone.linger - zone.timer) * 12);
-  if (warning) r(left, top, width, zone.height, zone.lit ? "#b79b5444" : "#ad554a47");
-  if (!warning || !zone.marker) bossStamp(row, frame, x, top + zone.height / 2, width, zone.height, false, opacity);
+  if (warning) {
+    const wash = zone.lit === true ? "#b79b5444" : zone.lit === false ? "#40828e44" : "#ad554a47";
+    r(left, top, width, zone.height, wash);
+    if (zone.marker) {
+      r(left, top, 7, 2, color);
+      r(right - 7, top, 7, 2, color);
+    }
+  }
+  if (warning ? !zone.marker : !drawScienceStrike(zone, frame, opacity))
+    bossStamp(row, frame, x, top + zone.height / 2, width, zone.height, false, opacity);
   // These marks use the exact same bounds as collision.
   r(left, top, 1, zone.height, warning ? "#ffc69f" : color);
   r(right - 1, top, 1, zone.height, warning ? "#ffc69f" : color);
@@ -461,6 +477,7 @@ function drawCombatShot(s) {
   const frame = staticPose ? 2 : Math.floor(age * 16) + (s.lane || 0) * 2;
   if (x < -170 || x > W + 170) return;
   if (s.team) {
+    if (s.mirror && drawMoonBolt(s, frame)) return;
     bossStamp(20 + (s.rift ? 4 : s.id), frame, x, y, s.rx * 3, s.ry * 3.6, s.vx < 0);
     return;
   }

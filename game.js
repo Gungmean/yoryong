@@ -127,6 +127,8 @@ assets.spellFX = new Image();
 assets.spellFX.src = "assets/combat/pixelfx.webp";
 assets.victoryFX = new Image();
 assets.victoryFX.src = "assets/combat/victory-fx.webp";
+assets.scienceFX = new Image();
+assets.scienceFX.src = "assets/combat/science-attacks.webp";
 let panelSince = 0;
 let returnFocus = null;
 let saveMessage = "자동 저장";
@@ -1513,7 +1515,8 @@ function step(dt) {
       if (s.mirror && s.vy > 0 && s.y >= s.mirror.y) {
         s.y = 2 * s.mirror.y - s.y;
         s.vy = -s.vy;
-        combatEvent("enemyImpact", s.mirror.x, s.mirror.y, .32, {id:s.id, rift:true, dir:Math.sign(s.vx)});
+        combatEvent("scienceFx", s.mirror.x, s.mirror.y, .45, {clip:"reflection", dir:Math.sign(s.vx)});
+        if (!quietCombat()) shake = Math.max(shake, 4);
         playEffect("impactOrbit", .64);
       }
       const contact = Math.abs(s.x - p.x) < (s.rx ?? 21) && Math.abs(s.y - (p.y - 23)) < (s.ry ?? 24);

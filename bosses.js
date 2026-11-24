@@ -102,7 +102,7 @@ function planScienceAttack(plan) {
       const x = clamp(player.x, 119, worldWidth - 119);
       return [
         {...patch(0, 112, 95, 0, 1.08), x, field: true},
-        {...patch(0, 51, 147, 1.08, .32), x, marker: "핵 붕괴"},
+        {...patch(0, 51, 147, 1.08, .32), x, collapse: true, marker: "핵 붕괴"},
       ];
     }
     case "reaction": {
@@ -126,14 +126,16 @@ function planScienceAttack(plan) {
       const roomAhead = plan.dir > 0 ? worldWidth - plan.start : plan.start;
       if (roomAhead < 470) plan.dir *= -1;
       const boundary = 186;
+      const shearSpeed = 235;
       plan.liquidX = plan.start + plan.dir * boundary;
       plan.liquidEnd = plan.start + plan.dir * 464;
+      plan.shearStopAt = boundary / shearSpeed;
       return [58, 132, 214, 291, 367, 437].flatMap(distance => {
         const x = plan.start + plan.dir * distance;
         const throughLiquid = distance > boundary;
         const pTime = Math.min(boundary, distance) / 510 + Math.max(0, distance - boundary) / 374;
         const p = {...patch(0, 31, 32, pTime, .13), x, wave:"P", marker:throughLiquid ? "P" : "P→S"};
-        return throughLiquid ? [p] : [p, {...patch(0, 31, 32, distance / 235, .23), x, wave:"S", marker:"S"}];
+        return throughLiquid ? [p] : [p, {...patch(0, 31, 32, distance / shearSpeed, .23), x, wave:"S", marker:"S"}];
       });
     }
     case "mirror": {
@@ -188,9 +190,14 @@ function releaseBossMove(e) {
       vx:dir * speed, vy:speed, rx:16, ry:11, life:2 * mirror.span / speed, dmg:16});
     playEffect(bossBoltSounds[move.id]);
   }
+  if (e.plan.shearStopAt) {
+    const delay = e.plan.shearStopAt;
+    combatEvent("scienceFx", e.plan.liquidX, GROUND, delay + .34,
+      {clip:"shearStop", delay, dir, plan:e.plan});
+  }
   for (const zone of strikes) {
     bossZones.push({
-      ...zone, id: move.id, rift: e.kind === 4, dmg: e.kind === 4 ? 19 : 14,
+      ...zone, dir, id: move.id, rift: e.kind === 4, dmg: e.kind === 4 ? 19 : 14,
       timer: -zone.delay, hit: false, struck: false,
     });
   }
@@ -253,7 +260,7 @@ function stepBossZones(dt) {
       zone.struck = true;
       const strength = clamp(1.12 - Math.abs(zone.x - player.x) / 570, .38, 1);
       playEffect(zone.rift ? "impactRoof" : bossImpactSounds[zone.id], strength);
-      if (!quietCombat() && zone.height > 40) shake = Math.max(shake, zone.rift ? 7 : 4);
+      if (!quietCombat() && zone.height > 40) shake = Math.max(shake, zone.rift || zone.collapse ? 7 : 4);
     }
     if (!zone.hit && !player.inv && Math.abs(player.x - zone.x) < zone.radius && player.y > GROUND - zone.height) {
       zone.hit = true;

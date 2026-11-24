@@ -652,7 +652,7 @@ function threatEffects() {
   }
   for (const s of shots) {
     if (!s.team) continue;
-    if (s.mirror) drawBattleMirror(s.mirror);
+    if (s.mirror) drawBattleMirror(s.mirror, Math.floor(s.age * 16));
     drawCombatShot(s);
   }
   for (let t of texts) {
@@ -830,6 +830,7 @@ function render() {
   if (defeated) drawBossClearBack(defeated);
   drawWardTechniqueBack();
   drawCombatGround();
+  drawScienceBack();
   monsters();
   chooseQuestLeg();
   friendlyEffects();

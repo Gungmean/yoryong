@@ -34,7 +34,7 @@ function drawScienceBack() {
   }
   const quiet = quietCombat();
   for (const zone of bossZones) {
-    if (zone.timer < 0) continue;
+    if (zone.trial || zone.timer < 0) continue;
     const t = zone.timer / zone.linger;
     if (zone.field) drawGravityWake(zone, t, false);
     if (quiet) continue;
@@ -76,12 +76,12 @@ function drawScienceResidue(e) {
   const reflected = e.clip === "reflection" && !quiet;
   const scale = reflected ? 1.55 : 1;
   if (reflected) scienceStamp("fracture", frame, e.x - cam, e.y + 1, 1.65, .80, false, alpha * .70);
-  scienceStamp(e.clip, frame, e.x - cam, e.y, scale, scale, e.dir < 0, alpha);
+  scienceStamp(e.clip, frame, e.x - cam, e.y, scale, scale * (e.slope ?? 1), e.dir < 0, alpha);
 }
 
 function drawMoonBolt(s, frame) {
   const dir = Math.sign(s.vx);
-  const {x, y, span} = s.mirror;
+  const {x, y, span, slope} = s.mirror;
   if (!quietCombat()) {
     // Sample the two actual legs, leaving a V-shaped wake through the reflection.
     const travel = (s.x - x) * dir;
@@ -89,7 +89,7 @@ function drawMoonBolt(s, frame) {
       const position = travel - i * 8;
       if (position < -span) continue;
       const scale = .42 + (10 - i) * .060;
-      scienceStamp("moon", frame + i, x + position * dir - cam, y - Math.abs(position),
+      scienceStamp("moon", frame + i, x + position * dir - cam, y - Math.abs(position) * slope,
         scale, scale, dir < 0, .77 - i * .058);
     }
   }

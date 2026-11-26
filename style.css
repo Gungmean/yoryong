@@ -194,6 +194,11 @@ kbd {
   position: absolute; top: -2px; bottom: -2px; width: 2px;
   background: #f7dbc2; box-shadow: 1px 0 #15121b;
 }
+#boss-marks .science-mark {
+  width: 5px; height: 5px; top: 0; margin-left: -2px;
+  background: #a8e5f3; transform: rotate(45deg);
+}
+#boss-meter[data-science-cleared] .science-mark { opacity: .4; }
 #bossfill {
   display: block; height: 100%; width: var(--boss-health);
   background: #b24448; transition: width .13s ease-out;
@@ -205,6 +210,22 @@ kbd {
   text-shadow: -1px -1px #15121b, 1px -1px #15121b, -1px 1px #15121b, 1px 1px #15121b;
 }
 #boss-warning:empty { display: none; }
+#boss-warning[data-science] {
+  position: relative; z-index: 1; justify-self: center; max-width: 100%; padding: 4px 9px 5px;
+  white-space: pre-line; background: #22212de8; color: #fff2d5; text-shadow: none;
+  border-bottom: 1px solid #a7b7db;
+}
+@media (max-width: 760px) {
+  .hud-top:has(#boss-warning[data-science]) #quest {
+    grid-area: 1 / 2; width: max-content; min-height: 30px; padding: 4px 8px;
+  }
+  .hud-top:has(#boss-warning[data-science]) #quest > :not(#qshortcut),
+  .hud-top:has(#boss-warning[data-science]) #quest::before { display: none; }
+  .hud-top:has(#boss-warning[data-science]) #qshortcut { display: block; font-size: 11px; }
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  .hud-top:has(#boss-warning[data-science]) #quest { margin-inline-end: 42px; }
+}
 #toast {
   position: absolute; top: 16%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 90%;
   color: var(--cream); background: #152740b8; padding: 6px 15px; font-size: 12px;

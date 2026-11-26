@@ -180,10 +180,8 @@ function warningPath(e) {
     drawMirrorCourse(mirror, dir, t);
     return;
   }
-  for (const zone of strikes) {
-    // Both phases of the solid-ground wave have the same footprint.
-    if (zone.wave !== "S") drawBossZone({...zone, id:move.id, rift:e.kind === 4}, true, t);
-  }
+  if (e.plan.trial) return;
+  for (const zone of strikes) drawBossZone({...zone, id:move.id, rift:e.kind === 4}, true, t);
   if (move.dash) {
     warningLane(start - cam - dir * e.half * .56, end - cam + dir * e.half * .56, GROUND - 20, color, t, 19);
     return;
@@ -246,19 +244,17 @@ function drawBattleMirror(mirror, frame) {
 
 function drawMirrorCourse(mirror, dir, progress) {
   const x = mirror.x - cam, y = mirror.y;
-  const start = [x - dir * mirror.span, y - mirror.span];
-  const end = [x + dir * mirror.span, y - mirror.span];
+  const start = [x - dir * mirror.span, y - mirror.span * mirror.slope];
   g.save();
   g.setLineDash([5, 6]);
-  fxLine([start, [x, y], end], "#291f427c", 7);
+  fxLine([start, [x, y]], "#291f427c", 7);
   fxLine([start, [x, y]], "#ace8ff", 3);
-  fxLine([[x, y], end], "#ffd2ff", 3);
   g.setLineDash([2, 4]);
   fxLine([[x, y - 48], [x, y]], "#eee6c7", 1);
   g.restore();
   if (!quietCombat()) {
-    const travel = (progress * 2 - 1) * mirror.span;
-    scienceStamp("moon", Math.floor(progress * 8), x + dir * travel, y - Math.abs(travel), .66, .66,
+    const travel = (progress - 1) * mirror.span;
+    scienceStamp("moon", Math.floor(progress * 8), x + dir * travel, y + travel * mirror.slope, .66, .66,
       dir < 0, .70);
   }
   drawBattleMirror(mirror, Math.floor(progress * 8));

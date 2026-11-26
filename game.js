@@ -106,6 +106,8 @@ function cameraTarget() {
     const focus = Math.abs(separation) < W - 75 ? (player.x + boss.x) / 2 + Math.sign(separation) * 17 : boss.x;
     return clamp(focus - W * .5, 0, Math.max(0, worldWidth - W));
   }
+  if (boss?.plan?.trial && boss.plan.trial.phase !== "result")
+    return clamp(player.x - W / 2, 0, Math.max(0, worldWidth - W));
   if (boss && W < 410 && Math.abs(player.x - boss.x) < W * .78)
     return clamp((player.x + boss.x) / 2 - W / 2, 0, Math.max(0, worldWidth - W));
   return clamp(player.x - W * .42, 0, Math.max(0, worldWidth - W));
@@ -239,7 +241,7 @@ function save() {
     const boss = foes.find((e) => e.boss);
     const encounter =
       boss && hp > 0 ? { kind: boss.kind, x: boss.x, hp: boss.hp, max: boss.max,
-        openStudy: boss.openStudy, readyWard: boss.readyWard } : null;
+        openStudy: boss.openStudy, readyWard: boss.readyWard, scienceCleared: Boolean(boss.scienceCleared) } : null;
     const next = JSON.stringify({
       generation: runGeneration, progress, scene, x: player.x, hp, mp,
       sound, musicEnabled, musicVolume, effectsVolume, reducedCombat, sceneryPaused, encounter,
@@ -355,17 +357,25 @@ function statusBars() {
   refreshScholarUltimate(b);
   const meter = $("boss-meter");
   meter.hidden = !b || b.dying > 0;
+  const trial = b?.plan?.trial;
+  const readings = trial && (trial.phase === "prepare" || trial.phase === "armed");
+  const readout = readings ? "\n" + trial.stations.map(station => station.name + " " + station.label).join("  /  ") : "";
   const warning = !b || b.dying ? "" : wardPrimed(b) ? "정답 · 필살기로 보호막을 깨세요"
+    : trial ? scienceWarning(trial) + readout
     : b.warn > 0 ? b.plan.move.name + " · " + b.plan.move.hint
     : wardClosed(b) ? (b.studyRetry > 0 ? "보호막 유지 · 다음 기회까지 회피하세요" : "보호막 분석 중")
+    : scienceRequired(b) ? "과학 패턴의 충격을 막으면 공격할 수 있어요"
     : b.openStudy == null ? "공격해서 보호막을 드러내세요" : "보호막 해제 · 공격 가능";
-  if ($("boss-warning").textContent !== warning) $("boss-warning").textContent = warning;
+  const warningText = $("boss-warning");
+  warningText.toggleAttribute("data-science", Boolean(trial && !wardPrimed(b) && !b.dying));
+  if (warningText.textContent !== warning) warningText.textContent = warning;
   if (b) {
+    meter.toggleAttribute("data-science-cleared", Boolean(b.scienceCleared));
     const health = (100 * b.hp) / b.max;
     const percent = Math.ceil(health);
     if (meter.dataset.boss !== String(b.kind)) {
       meter.dataset.boss = b.kind;
-      $("boss-marks").innerHTML = wardThresholds(b.kind).map(mark => `<i style="left:${mark}%"></i>`).join("");
+      $("boss-marks").innerHTML = wardThresholds(b.kind).map(mark => `<i style="left:${mark}%"></i>`).join("") + '<i class="science-mark" style="left:50%"></i>';
     }
     meter.style.setProperty("--boss-health", health + "%");
     meter.setAttribute("aria-label", subjects[b.kind].boss + " 체력");
@@ -1174,7 +1184,8 @@ function winBoss(i) {
 function hitFoe(e, n, skill = -1, dir = player.face, ultimate = false) {
   if (e.dying || !foes.includes(e) || wardClosed(e)) return;
   const wasAboveHalf = e.boss && bossPhase(e) === 1;
-  if (e.boss) n = Math.min(n, e.hp - studyFloor(e));
+  if (e.boss) n = Math.min(n, e.hp - bossDamageFloor(e));
+  if (n <= 0) return;
   e.hp = Math.max(0, e.hp - n);
   e.hit = 0.19;
   const chest = e.y - (e.boss ? e.height * .42 : 20);
@@ -1487,7 +1498,8 @@ function step(dt) {
     if (e.boss) stepBoss(e, dt);
     else stepHallFoe(e, dt);
     e.moving = Math.abs(previousX - e.x) > dt * 2.4;
-    if (e.boss && !e.rush && Math.abs(e.x - p.x) < 23 && p.y > GROUND - 31) hurt(8);
+    if (e.boss && !e.rush && (!e.plan?.trial || e.plan.trial.phase === "result") &&
+        Math.abs(e.x - p.x) < 23 && p.y > GROUND - 31) hurt(8);
   }
   if (modal && !reading) return;
   stepBossZones(dt);
@@ -1515,11 +1527,11 @@ function step(dt) {
       if (s.mirror && s.vy > 0 && s.y >= s.mirror.y) {
         s.y = 2 * s.mirror.y - s.y;
         s.vy = -s.vy;
-        combatEvent("scienceFx", s.mirror.x, s.mirror.y, .45, {clip:"reflection", dir:Math.sign(s.vx)});
+        combatEvent("scienceFx", s.mirror.x, s.mirror.y, .45, {clip:"reflection", dir:Math.sign(s.vx), slope:s.mirror.slope});
         if (!quietCombat()) shake = Math.max(shake, 4);
         playEffect("impactOrbit", .64);
       }
-      const contact = Math.abs(s.x - p.x) < (s.rx ?? 21) && Math.abs(s.y - (p.y - 23)) < (s.ry ?? 24);
+      const contact = !s.visualOnly && Math.abs(s.x - p.x) < (s.rx ?? 21) && Math.abs(s.y - (p.y - 23)) < (s.ry ?? 24);
       if (contact || s.y > GROUND) {
         if (contact) hurt(s.dmg);
         s.life = 0;
@@ -1815,6 +1827,7 @@ if (resumeFoe) {
   if (boss && Number.isFinite(resumeFoe.hp) && Number.isFinite(resumeFoe.x)) {
     const savedMax = resumeFoe.max > 0 ? resumeFoe.max : bossStats[boss.kind].oldHp;
     boss.hp = savedMax === boss.max ? clamp(resumeFoe.hp, 0, boss.max) : clamp(resumeFoe.hp / savedMax, 0, 1) * boss.max;
+    boss.scienceCleared = resumeFoe.scienceCleared ?? boss.hp < boss.max / 2;
     const open = resumeFoe.openStudy;
     if (Number.isInteger(open) && open >= 0 && open < bossStudies[boss.kind].length) boss.openStudy = open;
     if (resumeFoe.readyWard === nextWard(boss) && wardClosed(boss)) boss.readyWard = resumeFoe.readyWard;

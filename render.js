@@ -640,14 +640,14 @@ function friendlyEffects() {
 function threatEffects() {
   // Threat outlines and enemy cores sit over the player and friendly effects.
   for (const e of foes) if (e.boss && e.plan) {
-    if (e.plan.liquidX != null && (e.warn > 0 || bossZones.some(zone => zone.wave))) drawSeismicBed(e.plan);
+    if (e.plan.liquidX != null && bossZones.some(zone => zone.wave && zone.timer >= 0)) drawSeismicBed(e.plan);
     if (e.warn > 0) {
       bossCharge(e);
       warningPath(e);
     }
   }
   for (const zone of bossZones) {
-    if (zone.timer < 0 && zone.wave === "S" && bossZones.some(p => p.wave === "P" && p.x === zone.x)) continue;
+    if (zone.trial || (zone.visualOnly && zone.timer < 0)) continue;
     drawBossZone(zone, zone.timer < 0, zone.timer < 0 ? 1 + zone.timer / zone.delay : 1);
   }
   for (const s of shots) {
@@ -655,6 +655,8 @@ function threatEffects() {
     if (s.mirror) drawBattleMirror(s.mirror, Math.floor(s.age * 16));
     drawCombatShot(s);
   }
+  const scienceBoss = foes.find(e => e.boss && !e.dying && e.plan?.trial);
+  if (scienceBoss) drawScienceStations(scienceBoss.plan.trial, subjects[scienceBoss.kind].color, bossWarningProgress(scienceBoss));
   for (let t of texts) {
     word(String(t.n), t.x - cam + 1, t.y + 1, 19, "#493a35");
     word(String(t.n), t.x - cam, t.y, 19, "#ffe8a9");

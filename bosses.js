@@ -16,33 +16,33 @@ const bossMoves = [
   [
     { name: "궤도 연사", hint: "두 발을 뛰어넘기", id: 0, lead: .95, bolts: [bolt(25), bolt(25, .24)] },
     { name: "반중력 궤도", hint: "바닥에 머물기", id: 0, lead: .92, bolts: [bolt(94), bolt(94, .27, true)] },
-    { name: "중력핵 붕괴", hint: "핵에 가까울수록 끌려가요. 바깥으로 대시하세요", id: 0, lead: 1.30, signature: "gravity" },
+    { name: "중력핵 붕괴", id: 0, lead: 5.05, signature: "gravity" },
     { name: "겹궤도", hint: "낮은 구체만 뛰어넘기", id: 0, lead: 1.0, bolts: [bolt(100), bolt(24, .3), bolt(100, .58)] },
   ],
   [
     { name: "시약 삼중 낙하", hint: "표식 사이로 이동", id: 1, lead: 1.08, zones: [patch(0, 27, 141), patch(-101, 27, 141, .20), patch(101, 27, 141, .20)] },
     { name: "플라스크 포말", hint: "거품을 뛰어넘기", id: 1, lead: .93, bolts: [bolt(29), bolt(29, .25, true)] },
-    { name: "시약 연쇄 반응", hint: "물이 많이 생기는 곳에서 포말이 높게 솟아요", id: 1, lead: 1.42, signature: "reaction" },
+    { name: "시약 연쇄 반응", id: 1, lead: 5.30, signature: "reaction" },
     { name: "급격한 기화", hint: "좁은 분출구 사이에 서기", id: 1, lead: 1.05,
       zones: [patch(-62, 24, 107, 0, .33), patch(62, 24, 107, 0, .33), patch(0, 30, 121, .60, .34)] },
   ],
   [
     { name: "덩굴 이중 파동", hint: "두 파동을 뛰어넘기", id: 2, lead: 1.0, bolts: [bolt(15), bolt(15, .28)] },
     { name: "숲의 울타리", hint: "붉은 뿌리 표식 피하기", id: 2, lead: 1.12, zones: [patch(0, 48, 136), patch(146, 37, 136, .24), patch(-146, 37, 136, .24)] },
-    { name: "빛과 그늘의 덩굴", hint: "돌진을 피한 뒤 그늘의 낮은 덩굴을 넘으세요", id: 2, lead: 1.36, dash: 320, signature: "light" },
+    { name: "숨 쉬는 덩굴", id: 2, lead: 4.85, signature: "light" },
     { name: "꽃가루 폭풍", hint: "윗바람은 바닥에서 피하기", id: 2, lead: .96, bolts: [bolt(99), bolt(99, .28), bolt(99, .56, true)] },
   ],
   [
     { name: "유성 삼각 낙하", hint: "낙하 표식 사이로 이동", id: 3, lead: 1.11, zones: [patch(0, 31, 173), patch(-114, 31, 173, .22), patch(114, 31, 173, .22)] },
     { name: "운석 등껍질 돌진", hint: "돌진을 뛰어넘기", id: 3, lead: 1.14, dash: 350 },
-    { name: "외핵을 가르는 지진파", hint: "P파가 먼저 와요. 액체층에서는 S파가 멈춰요", id: 3, lead: 1.46, signature: "seismic" },
+    { name: "외핵을 가르는 지진파", id: 3, lead: 3.40, signature: "seismic" },
     { name: "운석 폭격", hint: "표식 사이의 빈 지대로 이동", id: 3, lead: 1.18, zones: [patch(0, 54, 187), patch(-167, 45, 187, .31), patch(167, 45, 187, .58)] },
   ],
   [
     { name: "망각의 파동", hint: "낮은 파동을 뛰어넘기", id: 0, lead: .98, bolts: [bolt(22), bolt(100, .25), bolt(22, .50)] },
     { name: "균열의 별비", hint: "빛 기둥이 없는 곳으로 이동", id: 3, lead: 1.15, zones: [patch(0, 40, 201), patch(-126, 35, 201, .21), patch(126, 35, 201, .21), patch(249, 29, 201, .44), patch(-249, 29, 201, .44)] },
     { name: "청룡 횡단", hint: "청룡이 덮칠 때 더블 점프", id: 2, lead: 1.18, dash: 395 },
-    { name: "월광 반사", hint: "빛이 거울에서 같은 각도로 꺾여요. 두 경로를 피하세요", id: 0, lead: 1.45, signature: "mirror" },
+    { name: "월광 반사", id: 0, lead: 3.85, signature: "mirror" },
     { name: "청룡의 삼중 숨결", hint: "가운데를 비우고 낮은 숨결은 뛰어넘으세요", id: 1, lead: 1.37,
       zones: [patch(0, 69, 192, 0, .39), patch(-110, 53, 31, .56, .43), patch(110, 53, 31, .56, .43),
         patch(0, 66, 211, 1.11, .40)] },
@@ -54,6 +54,15 @@ const bossZones = [];
 function bossPhase(e) {
   return e.hp <= e.max * .5 ? 2 : 1;
 }
+function scienceRequired(e) {
+  return e.boss && !e.scienceCleared && bossPhase(e) === 2;
+}
+
+function bossDamageFloor(e) {
+  const scienceFloor = e.scienceCleared ? 0 : Math.min(e.hp, Math.ceil(e.max / 2));
+  return Math.max(studyFloor(e), scienceFloor);
+}
+
 function bossWarningProgress(e) {
   return e.plan && e.warn > 0 ? 1 - e.warn / e.plan.move.lead : 0;
 }
@@ -75,7 +84,7 @@ function chooseBossMove(e, phase) {
     if (move.bolts) return (move.bolts[0].height > 65) === airborne ? 3 : 1;
     return distance < 115 ? 4 : 2;
   }
-  const index = phase === 2 && !e.usedSignature ? opening : phaseChanged ? 0
+  const index = phase === 2 && (!e.usedSignature || scienceRequired(e)) ? opening : phaseChanged ? 0
     : e.remainingMoves.reduce((best, id) => fit(id) > fit(best) ? id : best);
   e.remainingMoves = e.remainingMoves.filter(id => id !== index);
   e.phase = phase;
@@ -89,61 +98,16 @@ function planBossMove(e) {
   if (move.dash && Math.abs(clamp(e.x + dir * move.dash, limit, worldWidth - limit) - e.x) < 120) dir *= -1;
   const end = move.dash ? clamp(e.x + dir * move.dash, limit, worldWidth - limit) : e.x;
   const plan = {move, dir, start:e.x, end, strikes:[]};
-  plan.strikes = move.signature ? planScienceAttack(plan) : (move.zones || []).map(zone => ({...zone, x:player.x + zone.offset}));
+  if (move.signature) {
+    e.scienceRound ??= Math.floor(Math.random() * 6);
+    plan.strikes = planScienceAttack(plan, e.scienceRound++);
+  } else {
+    plan.strikes = (move.zones || []).map(zone => ({...zone, x:player.x + zone.offset}));
+  }
   plan.strikes = plan.strikes.filter(zone => zone.x + zone.radius >= 17 && zone.x - zone.radius <= worldWidth - 17);
   const beats = [...new Set(plan.strikes.map(zone => zone.delay))].sort((a,b) => a-b);
   if (beats.length > 1) for (const zone of plan.strikes) zone.beat = beats.indexOf(zone.delay) + 1;
   return plan;
-}
-
-function planScienceAttack(plan) {
-  switch (plan.move.signature) {
-    case "gravity": {
-      const x = clamp(player.x, 119, worldWidth - 119);
-      return [
-        {...patch(0, 112, 95, 0, 1.08), x, field: true},
-        {...patch(0, 51, 147, 1.08, .32), x, collapse: true, marker: "핵 붕괴"},
-      ];
-    }
-    case "reaction": {
-      // 2 H₂ + O₂ → 2 H₂O. The earlier exhausted reactant fixes the yield.
-      const center = clamp(player.x, 146, worldWidth - 146);
-      return [[4,1], [6,2], [2,3]].map(([hydrogen, oxygen], i) => {
-        const water = 2 * Math.min(hydrogen / 2, oxygen);
-        const x = center + plan.dir * (i - 1) * 102;
-        return {...patch(0, 39, 14 + water * 9, i * .31, .82), x, water,
-          marker:`H₂ ${hydrogen} · O₂ ${oxygen}`};
-      });
-    }
-    case "light":
-      return [.22, .52, .81].map((fraction, i) => {
-        const lit = i !== 1;
-        const x = plan.start + fraction * (plan.end - plan.start);
-        return {...patch(0, 28, lit ? 115 : 30, .33 + i * .23, .39), x, lit,
-          marker: lit ? "빛" : "그늘"};
-      });
-    case "seismic": {
-      const roomAhead = plan.dir > 0 ? worldWidth - plan.start : plan.start;
-      if (roomAhead < 470) plan.dir *= -1;
-      const boundary = 186;
-      const shearSpeed = 235;
-      plan.liquidX = plan.start + plan.dir * boundary;
-      plan.liquidEnd = plan.start + plan.dir * 464;
-      plan.shearStopAt = boundary / shearSpeed;
-      return [58, 132, 214, 291, 367, 437].flatMap(distance => {
-        const x = plan.start + plan.dir * distance;
-        const throughLiquid = distance > boundary;
-        const pTime = Math.min(boundary, distance) / 510 + Math.max(0, distance - boundary) / 374;
-        const p = {...patch(0, 31, 32, pTime, .13), x, wave:"P", marker:throughLiquid ? "P" : "P→S"};
-        return throughLiquid ? [p] : [p, {...patch(0, 31, 32, distance / shearSpeed, .23), x, wave:"S", marker:"S"}];
-      });
-    }
-    case "mirror": {
-      const x = clamp(player.x + plan.dir * 30, 171, worldWidth - 171);
-      plan.mirror = {x, y:GROUND - 18, span:154};
-      return [];
-    }
-  }
 }
 
 function gravityAcceleration(p, x) {
@@ -155,7 +119,8 @@ function gravityAcceleration(p, x) {
 
 function gravityDrift(p, dt, reading) {
   const field = bossZones.find(zone => zone.field && zone.timer >= 0);
-  if (!field || p.dash > 0 || reading) return 0;
+  if (!field || p.dash > 0 || reading ||
+      field.anchors?.some(station => Math.abs(p.x - station.x) <= field.anchorRadius)) return 0;
   return clamp((p.gravityVX + gravityAcceleration(p, field.x) * dt) * Math.exp(-dt * 6), -115, 115);
 }
 
@@ -185,9 +150,9 @@ function releaseBossMove(e) {
   combatEvent("bossRelease", e.x, e.y, .48, { id: move.id, dir, rift: e.kind === 4, scale: e.height / 120 });
   for (const entry of move.bolts || []) e.bolts.push({ bolt: entry, dir, id: move.id, remaining: entry.delay });
   if (mirror) {
-    const speed = 248;
-    shots.push({team:1, rift:true, id:move.id, mirror, x:mirror.x - dir * mirror.span, y:mirror.y - mirror.span,
-      vx:dir * speed, vy:speed, rx:16, ry:11, life:2 * mirror.span / speed, dmg:16});
+    const {x, y, span, slope, speed} = mirror;
+    shots.push({team:1, rift:true, id:move.id, mirror, x:x - dir * span, y:y - span * slope,
+      vx:dir * speed, vy:speed * slope, rx:16, ry:11, life:2 * span / speed, visualOnly:true});
     playEffect(bossBoltSounds[move.id]);
   }
   if (e.plan.shearStopAt) {
@@ -198,9 +163,10 @@ function releaseBossMove(e) {
   for (const zone of strikes) {
     bossZones.push({
       ...zone, dir, id: move.id, rift: e.kind === 4, dmg: e.kind === 4 ? 19 : 14,
-      timer: -zone.delay, hit: false, struck: false,
+      timer: -zone.delay, hit: false, struck: false, visualOnly: Boolean(e.plan.trial),
     });
   }
+  if (e.plan.trial) beginSciencePulse(e);
   if (move.dash) {
     e.rush = { start, end, elapsed: 0, duration: .65, hit: false, id: move.id };
     playEffect("bossRush");
@@ -232,7 +198,9 @@ function stepBoss(e, dt) {
       releaseBossMove(e);
       const recovery = e.phase === 2 ? (e.kind === 4 ? 1.30 : 1.55) : 2.05;
       const lastStrike = e.plan.strikes.reduce((last, zone) => Math.max(last, zone.delay + zone.linger), 0);
-      e.time = Math.max(recovery, lastStrike + .28);
+      const trial = e.plan.trial;
+      const readout = trial ? trial.delay + sciencePulseLength + 1.45 : 0;
+      e.time = Math.max(recovery, lastStrike + .28, readout);
     }
     return;
   }
@@ -254,6 +222,12 @@ function stepBossZones(dt) {
   for (let i = bossZones.length - 1; i >= 0; i--) {
     const zone = bossZones[i];
     zone.timer += dt;
+    if (zone.trial) {
+      stepSciencePulse(zone);
+      if (zone.timer >= zone.linger) bossZones.splice(i, 1);
+      if (modal && modal !== "ward") return;
+      continue;
+    }
     if (zone.timer >= zone.linger) { bossZones.splice(i, 1); continue; }
     if (zone.timer < 0 || zone.field) continue;
     if (!zone.struck) {
@@ -262,7 +236,7 @@ function stepBossZones(dt) {
       playEffect(zone.rift ? "impactRoof" : bossImpactSounds[zone.id], strength);
       if (!quietCombat() && zone.height > 40) shake = Math.max(shake, zone.rift || zone.collapse ? 7 : 4);
     }
-    if (!zone.hit && !player.inv && Math.abs(player.x - zone.x) < zone.radius && player.y > GROUND - zone.height) {
+    if (!zone.visualOnly && !zone.hit && !player.inv && Math.abs(player.x - zone.x) < zone.radius && player.y > GROUND - zone.height) {
       zone.hit = true;
       hurt(zone.dmg);
       if (modal && modal !== "ward") return;
